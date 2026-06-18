@@ -181,12 +181,16 @@ function addContextLines(match: FffGrepMatch, lineNumbers: Set<number>): void {
 function formatHashlineGrepOutput(
   result: FffGrepResult,
   cwd: string,
-): { output: string; linesTruncated: boolean } {
-  if (result.items.length === 0) return { output: "No matches found", linesTruncated: false };
+): { output: string; linesTruncated: boolean; staleWarnings: string[] } {
+  if (result.items.length === 0) {
+    return { output: "No matches found", linesTruncated: false, staleWarnings: [] };
+  }
 
   const lines: string[] = [];
+  const staleWarnings: string[] = [];
   let currentFile = "";
   let currentNumbers = new Set<number>();
+  let currentMatches = new Map<number, string>();
   let currentAnnotation = "";
   let linesTruncated = false;
 
@@ -202,6 +206,7 @@ function formatHashlineGrepOutput(
     } catch {
       lines.push(`Cannot read matched file: ${currentFile}`);
       currentNumbers = new Set<number>();
+      currentMatches = new Map<number, string>();
       return;
     }
 
@@ -211,6 +216,11 @@ function formatHashlineGrepOutput(
       const originalLine = file.lines[lineNumber - 1];
       if (originalLine === undefined) continue;
 
+      const expectedLine = currentMatches.get(lineNumber);
+      if (expectedLine !== undefined && originalLine !== expectedLine) {
+        staleWarnings.push(`${currentFile}:${lineNumber}`);
+      }
+
       const hash = file.lineHashes[lineNumber - 1]!;
       const truncated = truncateLine(originalLine);
       if (truncated.truncated) linesTruncated = true;
@@ -218,6 +228,7 @@ function formatHashlineGrepOutput(
     }
 
     currentNumbers = new Set<number>();
+    currentMatches = new Map<number, string>();
   };
 
   for (const match of result.items) {
@@ -227,10 +238,11 @@ function formatHashlineGrepOutput(
       currentAnnotation = fileAnnotation(match);
     }
     addContextLines(match, currentNumbers);
+    currentMatches.set(match.lineNumber, match.lineContent);
   }
   flush();
 
-  return { output: lines.join("\n"), linesTruncated };
+  return { output: lines.join("\n"), linesTruncated, staleWarnings };
 }
 
 function renderTextResult(
@@ -415,6 +427,7 @@ export function registerFffTools(pi: ExtensionAPI): void {
       const grepResult = f.grep(query, {
         mode,
         smartCase,
+        pageSize: effectiveLimit,
         maxMatchesPerFile: Math.min(effectiveLimit, 50),
         cursor: (params.cursor ? getGrepCursor(params.cursor) : null) ?? null,
         beforeContext: params.context ?? 0,
@@ -427,9 +440,10 @@ export function registerFffTools(pi: ExtensionAPI): void {
       let result = grepResult.value;
       let fuzzyNotice: string | null = null;
       if (result.items.length === 0 && !params.cursor && mode !== "regex") {
-        const fuzzy = f.grep(params.pattern, {
+        const fuzzy = f.grep(query, {
           mode: "fuzzy",
           smartCase,
+          pageSize: effectiveLimit,
           maxMatchesPerFile: Math.min(effectiveLimit, 50),
           cursor: null,
           beforeContext: 0,
@@ -449,6 +463,9 @@ export function registerFffTools(pi: ExtensionAPI): void {
       if (result.regexFallbackError) notices.push(`Invalid regex: ${result.regexFallbackError}, used literal match`);
       if (result.nextCursor) notices.push(`Continue with cursor=\"${storeGrepCursor(result.nextCursor)}\"`);
       if (formatted.linesTruncated) notices.push(`Some lines truncated to ${GREP_MAX_LINE_LENGTH} chars. Use read tool to see full lines`);
+      if (formatted.staleWarnings.length > 0) {
+        notices.push(`FFF result may be stale for ${formatted.staleWarnings.join(", ")}; use read before editing`);
+      }
       if (notices.length > 0) output += `\n\n[${notices.join(". ")}]`;
       if (fuzzyNotice) output = `[${fuzzyNotice}]\n${output}`;
 
