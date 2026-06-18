@@ -388,6 +388,7 @@ export function registerFffTools(pi: ExtensionAPI): void {
     promptGuidelines: [
       "Prefer bare identifiers as patterns. Literal queries are most efficient.",
       "Use path for include ('src/', '*.ts') and exclude for noise ('test/,*.min.js').",
+      "caseSensitive: true when you need exact case; default smart-case is usually better.",
       "Copy only the 3-character hash between # and │ into edit or insert; line numbers are display-only.",
       "After 1-2 greps, read the top match instead of more greps.",
     ],
@@ -512,7 +513,8 @@ export function registerFffTools(pi: ExtensionAPI): void {
       "Matches the WHOLE path, not just the filename — `profile` hits `chrome/browser/profiles/x.cc` too.",
       "Keep queries to 1-2 terms; extra words narrow.",
       "Use for paths, not content. Use grep for content.",
-      "For exact path matches use a glob in `path` — e.g. path: '**/profile.h' for exact filename.",
+      "For exact path matches use a glob in `path` — e.g. path: '**/profile.h' or path: 'src/**/profile.h'.",
+      "To list a directory, use path: 'dir/**' with an empty or wildcard pattern.",
       "Use exclude: 'test/,*.min.js' to cut noise in large repos.",
     ],
     parameters: findSchema,
