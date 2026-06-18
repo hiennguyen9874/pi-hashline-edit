@@ -18,7 +18,7 @@ import {
 import { throwIfAborted } from "./runtime";
 import { getFileSnapshot } from "./snapshot";
 import { buildChangedResponse, buildNoopResponse } from "./edit-response";
-import { partitionExact, fuzzyMatch, attachSnapshotLines } from "./fuzzy-match";
+import { partitionExact, fuzzyMatch, attachSnapshotLines, findHashLines } from "./fuzzy-match";
 import { getReadSnapshot } from "./read-snapshot";
 import { threeWayMerge } from "./merge";
 import { resolveEditTarget, emitUndoSnapshot } from "./edit";
@@ -70,7 +70,8 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
     const { bom, normalized: originalNormalized, ending: originalEnding } = target;
 
     await ensureHasherReady();
-    const resolved = resolveEditAnchors(toolEdits);
+    const currentFile = buildHashlineFile(originalNormalized);
+    const resolved = resolveEditAnchors(toolEdits, currentFile);
 
     let result: string;
     let warnings: string[];
@@ -79,7 +80,6 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
       | undefined;
 
     throwIfAborted(signal);
-    const currentFile = buildHashlineFile(originalNormalized);
 
     // Structural validation (range, line bounds)
     const struct = validateAnchors(currentFile, resolved);
@@ -166,10 +166,12 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
         return refs.map((r) => {
           const line = r.line ?? 1;
           retryLines.add(line);
+          const candidates = findHashLines(currentFile, r.hash);
           return {
             line,
             expected: r.hash,
             actual: r.line ? currentFile.lineHashes[r.line - 1] ?? "OOB" : "OOB",
+            candidates,
           };
         });
       });

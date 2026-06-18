@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { computeLineHash, resolveEditAnchors, type HashlineToolEdit } from "../../src/hashline";
+import { buildHashlineFile, computeLineHash, resolveEditAnchors, type HashlineToolEdit } from "../../src/hashline";
 import { ensureHasherReady } from "../../src/hash-format";
 
 describe("strict edit input (no autocorrection)", () => {
@@ -12,7 +12,7 @@ describe("strict edit input (no autocorrection)", () => {
     const toolEdits: HashlineToolEdit[] = [
       { op: "replace", pos: tag, lines: ["1#A4x│foo"] },
     ];
-    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_INVALID_PATCH\]/);
+    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
   });
 
   it("rejects bare HASH│ prefix without line number", () => {
@@ -20,7 +20,7 @@ describe("strict edit input (no autocorrection)", () => {
     const toolEdits: HashlineToolEdit[] = [
       { op: "replace", pos: tag, lines: ["A4x│foo"] },
     ];
-    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_INVALID_PATCH\]/);
+    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
   });
 
   it("rejects +HASH│ prefix without line number", () => {
@@ -28,14 +28,23 @@ describe("strict edit input (no autocorrection)", () => {
     const toolEdits: HashlineToolEdit[] = [
       { op: "replace", pos: tag, lines: "+A4x│foo" },
     ];
-    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_INVALID_PATCH\]/);
+    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
   });
   it("rejects string lines containing rendered diff additions", () => {
     const tag = computeLineHash(["foo"], 0);
     const toolEdits: HashlineToolEdit[] = [
       { op: "replace", pos: tag, lines: "+1#A4x│foo" },
     ];
-    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_INVALID_PATCH\]/);
+    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
+  });
+
+  it("reports whether a bare prefix matches a real file hash", () => {
+    const file = buildHashlineFile("foo\n");
+    const tag = file.lineHashes[0]!;
+    const toolEdits: HashlineToolEdit[] = [
+      { op: "replace", pos: tag, lines: [`${tag}│foo`] },
+    ];
+    expect(() => resolveEditAnchors(toolEdits, file)).toThrow(/The prefix matches a real file hash/);
   });
 
   it("rejects diff deletion rows in array form", () => {

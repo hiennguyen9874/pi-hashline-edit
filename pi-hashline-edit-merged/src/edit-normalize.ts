@@ -76,9 +76,12 @@ export function normalizeEditRequest(input: unknown, currentContent?: string): N
     if (input.edits.length === 0) {
       throw new Error('Edit request requires a non-empty "edits" array.');
     }
+    if (!input.edits.every(isRecord)) {
+      throw new Error('Edit request "edits" entries must be objects.');
+    }
     return {
       path: input.path,
-      edits: input.edits as Record<string, unknown>[],
+      edits: input.edits,
       warnings: [],
     };
   }

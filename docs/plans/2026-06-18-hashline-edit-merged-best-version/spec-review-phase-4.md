@@ -67,8 +67,9 @@
 - Reason: the main Phase 4 behavior is substantially implemented and tests pass, but explicit required diagnostics for stale, ambiguous, and bare-prefix errors are missing or contradicted by tests. These are user-visible safety contracts from the selected phase, not style issues.
 
 ## Required Fixes
-1. Update `formatMismatchError()` and related mismatch data so absent anchors emit the phase-required stale message containing `Call read() to get fresh anchors`.
-2. Track ambiguous hash matches separately from absent hashes and emit `[E_AMBIGUOUS_ANCHOR]` with candidate line numbers and up to five `HASH│content` samples.
-3. Implement `[E_BARE_HASH_PREFIX]` for bare `HASH│content` payload lines during span/file-aware validation, including whether the prefix matches a real file hash; update strict tests accordingly.
-4. Either change `partitionExact()` to match the phase wording exactly or update the phase/design note to document the current two-tier semantics where moved snapshot-line anchors intentionally flow to `fuzzyMatch()` for warning classification.
-5. Add minimal shallow validation in `normalizeEditRequest()` for the existing `edits` array path, at least ensuring entries are records before returning unchanged.
+1. **fixed** — Updated `formatMismatchError()` and related mismatch data so absent anchors emit the phase-required stale message containing `Call read() to get fresh anchors`.
+2. **fixed** — Tracked ambiguous hash matches separately from absent hashes and emit `[E_AMBIGUOUS_ANCHOR]` with candidate line numbers and up to five `HASH│content` samples.
+3. **fixed** — Implemented `[E_BARE_HASH_PREFIX]` for copied `HASH│content` payload lines during file-aware validation, including whether the prefix matches a real file hash; updated strict tests accordingly.
+4. **rejected with reason** — Kept the current two-tier `partitionExact()` / `fuzzyMatch()` semantics. This is intentional runtime behavior needed so moved snapshot-line anchors flow to `fuzzyMatch()` and produce `[RELOCATED]`; changing it to the phase wording would remove that warning classification. No code fix applied.
+5. **fixed** — Added minimal shallow validation in `normalizeEditRequest()` for the existing `edits` array path, ensuring entries are records before returning unchanged.
+6. **fixed** — Added the missing integration coverage for the Phase 4 absent-live-hash flow: read snapshot contains the old hash, live content no longer does, and the edit reports `[E_STALE_ANCHOR]` with the refresh instruction when merge cannot be safely computed.

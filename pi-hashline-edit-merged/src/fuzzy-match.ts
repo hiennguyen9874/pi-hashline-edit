@@ -13,11 +13,16 @@ export interface MatchResult {
   warnings: string[];
 }
 
-function resolveUniqueHash(file: HashlineFile, hash: string): number | null {
+export function findHashLines(file: Pick<HashlineFile, "lineHashes">, hash: string): number[] {
   const matches: number[] = [];
   file.lineHashes.forEach((lineHash, index) => {
     if (lineHash === hash) matches.push(index + 1);
   });
+  return matches;
+}
+
+function resolveUniqueHash(file: HashlineFile, hash: string): number | null {
+  const matches = findHashLines(file, hash);
   return matches.length === 1 ? matches[0]! : null;
 }
 

@@ -54,7 +54,7 @@ describe("applyHashlineEdits — error handling", () => {
     const edits = [
       { op: "replace", pos: { line: 2, hash: "XX" }, lines: ["BBB"] },
     ];
-    expect(() => applyHashlineEdits(content, edits as any)).toThrow(/1 stale anchor: XX\./);
+    expect(() => applyHashlineEdits(content, edits as any)).toThrow(/\[E_STALE_ANCHOR\] stale anchor "XX"\. Call read\(\) to get fresh anchors\./);
   });
 
   it("throws on out-of-range line", () => {
@@ -84,7 +84,7 @@ describe("applyHashlineEdits — error handling", () => {
       { op: "replace", pos: { line: 1, hash: "XX" }, lines: ["A"] },
       { op: "replace", pos: { line: 3, hash: "YY" }, lines: ["C"] },
     ];
-    expect(() => applyHashlineEdits(content, edits as any)).toThrow(/2 stale anchors: XX, YY\./);
+    expect(() => applyHashlineEdits(content, edits as any)).toThrow(/\[E_STALE_ANCHOR\] stale anchors "XX", "YY"\. Call read\(\) to get fresh anchors\./);
   });
 
   it("range error takes priority over stale anchors", () => {
@@ -100,7 +100,7 @@ describe("applyHashlineEdits — error handling", () => {
     ];
     expect(() => applyHashlineEdits(content, edits as any)).toThrow(/must be <= end line/);
   });
-  it("mismatch message exposes retryable hash-only snippets", () => {
+  it("mismatch message tells callers to refresh stale anchors", () => {
     expect(() =>
       applyHashlineEdits("aaa", [
         {
@@ -109,7 +109,16 @@ describe("applyHashlineEdits — error handling", () => {
           lines: ["bbb"],
         } as any,
       ]),
-    ).toThrow(/Retry with the >>> HASH│content lines below[\s\S]*>>> [A-Za-z0-9_\-]{3}│aaa/);
+    ).toThrow(/\[E_STALE_ANCHOR\] stale anchor "ABC"\. Call read\(\) to get fresh anchors\./);
+  });
+
+  it("formats ambiguous anchor diagnostics with candidate lines", () => {
+    const message = formatMismatchError([
+      { expected: "ABC", candidates: [1, 2] } as any,
+    ], ["aaa", "bbb"]);
+    expect(message).toContain('[E_AMBIGUOUS_ANCHOR] anchor "ABC" matches lines 1, 2.');
+    expect(message).toMatch(/    [A-Za-z0-9_\-]{3}│aaa/);
+    expect(message).toMatch(/    [A-Za-z0-9_\-]{3}│bbb/);
   });
 
   it("retains still-valid range endpoints in retry snippets", () => {
@@ -131,7 +140,7 @@ describe("applyHashlineEdits — error handling", () => {
         throw error;
       }
       expect(error.message).toContain(
-        `>>> ${validEnd.hash}│eee`,
+        `${validEnd.hash}│eee`,
       );
       expect(error.message).not.toContain(
         `>>> ${validEnd.line}#${validEnd.hash}│eee`,
@@ -282,7 +291,7 @@ describe("integration: resolveEditAnchors → applyHashlineEdits", () => {
     const toolEdits: HashlineToolEdit[] = [
       { op: "replace", pos: tag2, lines: `2#${hash}│BBB` },
     ];
-    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_INVALID_PATCH\]/);
+    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
   });
 
   it("full pipeline: copied full-line anchor is rejected before fuzzy text hints", () => {
@@ -310,6 +319,6 @@ describe("integration: resolveEditAnchors → applyHashlineEdits", () => {
     const toolEdits: HashlineToolEdit[] = [
       { op: "replace", pos: start, end, lines: replacement },
     ];
-    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_INVALID_PATCH\]/);
+    expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
   });
 });

@@ -20,9 +20,10 @@ export type HashlineEdit = {
 };
 
 interface HashMismatch {
-  line: number;
+  line?: number;
   expected: string;
-  actual: string;
+  actual?: string;
+  candidates?: number[];
 }
 
 export interface NoopEdit {
@@ -83,9 +84,9 @@ export function buildHashlineFile(content: string): HashlineFile {
  * file content. Matching any of these triggers `[E_INVALID_PATCH]`.
  */
 const HASHLINE_PREFIX_RE = new RegExp(
-  `^\\s*(?:>>>|>>)?\\s*(?:\\d+\\s*${ANCHOR_SEP}\\s*)?${HASH_CHARS_CLASS}${CONTENT_SEP}`);
+  `^\\s*(?:>>>|>>)?\\s*(?:\\d+\\s*${ANCHOR_SEP}\\s*)?(${HASH_CHARS_CLASS})${CONTENT_SEP}`);
 const HASHLINE_PREFIX_PLUS_RE = new RegExp(
-  `^\\+\\s*(?:\\d+\\s*${ANCHOR_SEP}\\s*)?${HASH_CHARS_CLASS}${CONTENT_SEP}`);
+  `^\\+\\s*(?:\\d+\\s*${ANCHOR_SEP}\\s*)?(${HASH_CHARS_CLASS})${CONTENT_SEP}`);
 const DIFF_MINUS_RE = /^-\s*\d+\s{4}/;
 
 // ─── Parsing ────────────────────────────────────────────────────────────
@@ -120,53 +121,55 @@ export function formatMismatchError(
   fileLines: readonly string[],
   retryLines: ReadonlySet<number> = new Set<number>(),
 ): string {
-  const retryLineSet = new Set<number>(retryLines);
-  for (const m of mismatches) {
-    retryLineSet.add(m.line);
-  }
+  const lineHashes = computeLineHashes(fileLines.join("\n"));
 
-  // De-duplicate: same line + same expected hash = same anchor
+  // De-duplicate: same expected hash + same candidate set = same anchor.
   const seenKeys = new Set<string>();
   const uniqueMismatches = mismatches.filter((m) => {
-    const key = `${m.line}:${m.expected}`;
+    const candidates = m.candidates?.join(",") ?? "";
+    const key = `${m.line ?? "?"}:${m.expected}:${candidates}`;
     if (seenKeys.has(key)) return false;
     seenKeys.add(key);
     return true;
   });
 
-  const displayLines = new Set<number>();
-  for (const m of uniqueMismatches) {
-    for (
-      let i = Math.max(1, m.line - 2);
-      i <= Math.min(fileLines.length, m.line + 2);
-      i++
-    ) {
-      displayLines.add(i);
+  const ambiguous = uniqueMismatches.filter((m) => (m.candidates?.length ?? 0) > 1);
+  const stale = uniqueMismatches.filter((m) => m.candidates === undefined || m.candidates.length === 0);
+  const out: string[] = [];
+
+  for (const mismatch of ambiguous) {
+    const candidates = mismatch.candidates ?? [];
+    out.push(
+      `[E_AMBIGUOUS_ANCHOR] anchor "${mismatch.expected}" matches lines ${candidates.join(", ")}.`,
+    );
+    for (const num of candidates.slice(0, 5)) {
+      const content = fileLines[num - 1] ?? "";
+      const hash = lineHashes[num - 1] ?? computeLineHash(fileLines, num - 1);
+      out.push(`    ${hash}${CONTENT_SEP}${content}`);
     }
   }
-  for (const line of retryLineSet) {
-    displayLines.add(line);
-  }
 
-  const sorted = [...displayLines].sort((a, b) => a - b);
-  const lineHashes = computeLineHashes(fileLines.join("\n"));
-  const anchorList = uniqueMismatches.map((m) => m.expected).join(", ");
-  const out: string[] = [
-    `[E_STALE_ANCHOR] ${uniqueMismatches.length} stale anchor${uniqueMismatches.length > 1 ? "s" : ""}: ${anchorList}. Retry with the >>> HASH${CONTENT_SEP}content lines below; copy only the 3-character hash before ${CONTENT_SEP} and keep both endpoints for range replaces.`,
-    "",
-  ];
-
-  let prev = -1;
-  for (const num of sorted) {
-    if (prev !== -1 && num > prev + 1) out.push("    ...");
-    prev = num;
-    const content = fileLines[num - 1];
-    const hash = lineHashes[num - 1] ?? computeLineHash(fileLines, num - 1);
+  if (stale.length > 0) {
+    const staleAnchors = [...new Set(stale.map((m) => m.expected))];
+    const quotedAnchors = staleAnchors.map((anchor) => `"${anchor}"`).join(", ");
     out.push(
-      retryLineSet.has(num)
-        ? `>>> ${hash}${CONTENT_SEP}${content}`
-        : `    ${hash}${CONTENT_SEP}${content}`,
+      staleAnchors.length === 1
+        ? `[E_STALE_ANCHOR] stale anchor ${quotedAnchors}. Call read() to get fresh anchors.`
+        : `[E_STALE_ANCHOR] stale anchors ${quotedAnchors}. Call read() to get fresh anchors.`,
     );
+
+    const retryLineSet = new Set<number>(retryLines);
+    for (const mismatch of stale) {
+      if (mismatch.line !== undefined) retryLineSet.add(mismatch.line);
+    }
+    const sorted = [...retryLineSet]
+      .filter((line) => line >= 1 && line <= fileLines.length)
+      .sort((a, b) => a - b);
+    for (const num of sorted.slice(0, 5)) {
+      const content = fileLines[num - 1] ?? "";
+      const hash = lineHashes[num - 1] ?? computeLineHash(fileLines, num - 1);
+      out.push(`    ${hash}${CONTENT_SEP}${content}`);
+    }
   }
 
   return out.join("\n");
@@ -179,14 +182,23 @@ export function formatMismatchError(
  * model must send literal file content for `lines`, not the rendered read /
  * diff form. Silent stripping is no longer performed — see AGENTS.md.
  */
-function assertNoDisplayPrefixes(lines: string[]): void {
+function assertNoDisplayPrefixes(lines: string[], file?: HashlineFile): void {
   for (const line of lines) {
     if (!line.length) continue;
-    if (
-      HASHLINE_PREFIX_RE.test(line) ||
-      HASHLINE_PREFIX_PLUS_RE.test(line) ||
-      DIFF_MINUS_RE.test(line)
-    ) {
+    const bareMatch = line.match(HASHLINE_PREFIX_RE) ?? line.match(HASHLINE_PREFIX_PLUS_RE);
+    if (bareMatch) {
+      const hash = bareMatch[1]!;
+      const realHash = file ? file.lineHashes.includes(hash) : undefined;
+      const realHashText = realHash === undefined
+        ? "Real file hash check unavailable."
+        : realHash
+          ? "The prefix matches a real file hash."
+          : "The prefix does not match a real file hash.";
+      throw new Error(
+        `[E_BARE_HASH_PREFIX] "lines" must contain literal file content, not rendered "HASH${CONTENT_SEP}content" prefixes. ${realHashText} Offending line: ${JSON.stringify(line)}`,
+      );
+    }
+    if (DIFF_MINUS_RE.test(line)) {
       throw new Error(
         `[E_INVALID_PATCH] "lines" must contain literal file content, not rendered "LINE${ANCHOR_SEP}HASH${CONTENT_SEP}" or diff "+/-" prefixes. Offending line: ${JSON.stringify(line)}`,
       );
@@ -202,12 +214,12 @@ function assertNoDisplayPrefixes(lines: string[]): void {
  * explicitly provided blank lines remain intact. Display prefixes are
  * rejected by `assertNoDisplayPrefixes`, never silently stripped.
  */
-export function hashlineParseText(edit: string[] | string | null): string[] {
+export function hashlineParseText(edit: string[] | string | null, file?: HashlineFile): string[] {
   if (edit === null) return [];
   const lines = typeof edit === "string"
     ? (edit.endsWith("\n") ? edit.slice(0, -1) : edit).replaceAll("\r", "").split("\n")
     : edit;
-  assertNoDisplayPrefixes(lines);
+  assertNoDisplayPrefixes(lines, file);
   return lines;
 }
 
@@ -216,12 +228,12 @@ export function hashlineParseText(edit: string[] | string | null): string[] {
  *
  * Strict: provided anchors must parse successfully.
  */
-export function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
+export function resolveEditAnchors(edits: HashlineToolEdit[], file?: HashlineFile): HashlineEdit[] {
   return edits.map((edit) => ({
     op: edit.op,
     pos: parseAnchorRef(edit.pos),
     ...(edit.end ? { end: parseAnchorRef(edit.end) } : {}),
-    lines: hashlineParseText(edit.lines ?? null),
+    lines: hashlineParseText(edit.lines ?? null, file),
     ...(edit.current !== undefined ? { current: edit.current } : {}),
   }));
 }

@@ -188,6 +188,35 @@ describe("edit merge fallback", () => {
       },
     );
   });
+  it("reports stale anchor when old hash is absent from live content but present in the read snapshot", async () => {
+    await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd, path }) => {
+      const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
+      const ctx = { cwd, ui: { notify() {} } } as any;
+
+      const readTool = getTool("read");
+      const editTool = getTool("edit");
+
+      const firstRead = await readTool.execute("r1", { path: "sample.ts" }, undefined, undefined, ctx);
+      const alphaRef = firstRead.content[0].text
+        .split("\n")
+        .find((line: string) => line.includes("│alpha"))!
+        .split("│")[0]!;
+
+      writeFileSync(path, "ALPHA\nbeta\n", "utf-8");
+
+      await expect(
+        editTool.execute(
+          "e1",
+          { path: "sample.ts", edits: [{ start: alphaRef, end: alphaRef, lines: ["agent-alpha"] }] },
+          undefined,
+          undefined,
+          ctx,
+        ),
+      ).rejects.toThrow(/\[E_STALE_ANCHOR\].*Call read\(\) to get fresh anchors/s);
+    });
+  });
+
   it("falls back to hard reject when snapshot does not match either", async () => {
     await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd, path }) => {
       const { pi, getTool } = makeFakePiRegistry();
