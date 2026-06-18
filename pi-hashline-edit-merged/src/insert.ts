@@ -13,6 +13,12 @@ import { resolveEditTarget } from "./edit";
 import { applyMutation } from "./mutation";
 import { isRecord } from "./runtime";
 import { ensureHasherReady } from "./hash-format";
+import {
+  consumeDoomLoopWarning,
+  formatDoomLoopMessage,
+  globalDoomLoopState,
+  recordToolCall,
+} from "./doom-loop";
 
 const insertEntrySchema = Type.Object(
   {
@@ -284,6 +290,7 @@ const insertToolDefinition: InsertToolDefinition = {
   },
 
   async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+    recordToolCall(globalDoomLoopState, "insert", _toolCallId, params as Record<string, unknown>);
     assertInsertRequest(params);
 
     await ensureHasherReady();
@@ -294,7 +301,7 @@ const insertToolDefinition: InsertToolDefinition = {
       (params as InsertRequestParams).edits,
     );
 
-    return applyMutation({
+    const result = await applyMutation({
       pi: _insertPi,
       path,
       absolutePath,
@@ -302,6 +309,11 @@ const insertToolDefinition: InsertToolDefinition = {
       signal,
       ctx,
     });
+    const warning = consumeDoomLoopWarning(globalDoomLoopState, _toolCallId);
+    if (warning) {
+      result.content[0]!.text += `\n\n${formatDoomLoopMessage(warning)}`;
+    }
+    return result;
   },
 };
 

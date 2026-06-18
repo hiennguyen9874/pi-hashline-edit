@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import registerCore from "../../extensions/core";
 import { buildHashlineFile, computeLineHash, formatHashlineRegion } from "../../src/hashline";
 import { formatHashlineReadPreview } from "../../src/read";
+import { resetDoomLoopStateForTests } from "../../src/doom-loop";
 import { ensureHasherReady } from "../../src/hash-format";
 import { makeFakePiRegistry, withTempFile } from "../support/fixtures";
 
@@ -149,6 +150,7 @@ describe("formatHashlineRegion", () => {
 describe("read tool protocol", () => {
   beforeEach(() => {
     vi.mocked(fileKindMod.loadFileKindAndText).mockReset();
+    resetDoomLoopStateForTests();
   });
 
   it("returns the empty-file advisory through the registered tool", async () => {
@@ -194,6 +196,23 @@ describe("read tool protocol", () => {
       expect(result.content[0].text).toMatch(/^[A-Za-z0-9_\-]{3}│alpha\n[A-Za-z0-9_\-]{3}│beta/);
       expect(result.content[0].text).not.toContain("1#");
       expect(result.content[0].text).not.toContain("3#");
+    });
+  });
+
+  it("warns on the third identical read call", async () => {
+    await withTempFile("sample.txt", "alpha\n", async ({ cwd }) => {
+      vi.mocked(fileKindMod.loadFileKindAndText).mockResolvedValue({ kind: "text", text: "alpha\n" });
+
+      const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
+      const readTool = getTool("read");
+      const ctx = { cwd } as any;
+
+      await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
+      await readTool.execute("r2", { path: "sample.txt" }, undefined, undefined, ctx);
+      const result = await readTool.execute("r3", { path: "sample.txt" }, undefined, undefined, ctx);
+
+      expect(result.content[0].text).toContain("REPEATED-CALL WARNING");
     });
   });
 

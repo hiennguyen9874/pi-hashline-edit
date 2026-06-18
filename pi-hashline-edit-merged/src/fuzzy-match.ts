@@ -21,6 +21,24 @@ function resolveUniqueHash(file: HashlineFile, hash: string): number | null {
   return matches.length === 1 ? matches[0]! : null;
 }
 
+function anchorMoved(anchor: Anchor | undefined, resolved: Anchor | undefined): boolean {
+  return anchor?.line !== undefined && resolved?.line !== undefined && anchor.line !== resolved.line;
+}
+
+export function attachSnapshotLines(edits: HashlineEdit[], snapshotFile: HashlineFile): HashlineEdit[] {
+  return edits.map((edit) => {
+    const posLine = resolveUniqueHash(snapshotFile, edit.pos.hash);
+    const endLine = edit.end ? resolveUniqueHash(snapshotFile, edit.end.hash) : null;
+    return {
+      ...edit,
+      pos: posLine === null ? edit.pos : { ...edit.pos, line: posLine },
+      ...(edit.end
+        ? { end: endLine === null ? edit.end : { ...edit.end, line: endLine } }
+        : {}),
+    };
+  });
+}
+
 function resolveAnchor(file: HashlineFile, anchor: Anchor): Anchor | null {
   const line = resolveUniqueHash(file, anchor.hash);
   return line === null ? null : { ...anchor, line };
@@ -53,7 +71,7 @@ export function partitionExact(
 
   for (const edit of edits) {
     const resolved = resolveEdit(file, edit);
-    if (resolved) {
+    if (resolved && !anchorMoved(edit.pos, resolved.pos) && !anchorMoved(edit.end, resolved.end)) {
       matched.push(resolved);
     } else {
       unmatched.push(edit);

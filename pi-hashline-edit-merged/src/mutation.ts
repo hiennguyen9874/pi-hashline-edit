@@ -18,7 +18,7 @@ import {
 import { throwIfAborted } from "./runtime";
 import { getFileSnapshot } from "./snapshot";
 import { buildChangedResponse, buildNoopResponse } from "./edit-response";
-import { partitionExact, fuzzyMatch } from "./fuzzy-match";
+import { partitionExact, fuzzyMatch, attachSnapshotLines } from "./fuzzy-match";
 import { getReadSnapshot } from "./read-snapshot";
 import { threeWayMerge } from "./merge";
 import { resolveEditTarget, emitUndoSnapshot } from "./edit";
@@ -39,6 +39,7 @@ export type MutationOptions = {
   toolEdits: HashlineToolEdit[];
   signal: AbortSignal;
   ctx: ExtensionContext;
+  initialWarnings?: string[];
 };
 
 // ─── Shared mutation engine ────────────────────────────────────────────────
@@ -52,7 +53,7 @@ export type MutationOptions = {
  * buildNoopResponse.
  */
 export async function applyMutation(options: MutationOptions): Promise<MutationResult> {
-  const { pi, path, absolutePath, toolEdits, signal, ctx } = options;
+  const { pi, path, absolutePath, toolEdits, signal, ctx, initialWarnings = [] } = options;
 
   const mutationTargetPath = await resolveMutationTargetPath(absolutePath);
   return withFileMutationQueue(mutationTargetPath, async () => {
@@ -84,10 +85,14 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
     const struct = validateAnchors(currentFile, resolved);
     if (!struct.ok) throw new Error(struct.message);
 
-    // Tier 1: exact hash match
-    const exactResult = partitionExact(resolved, currentFile);
     const snapshot = getReadSnapshot(absolutePath);
-    let allWarnings: string[] = [];
+    const editsWithSnapshotLines = snapshot
+      ? attachSnapshotLines(resolved, snapshot.file)
+      : resolved;
+
+    // Tier 1: exact hash match
+    const exactResult = partitionExact(editsWithSnapshotLines, currentFile);
+    let allWarnings: string[] = [...initialWarnings];
     let fuzzyEdits: HashlineEdit[] = [];
     let remaining = exactResult.unmatched;
 

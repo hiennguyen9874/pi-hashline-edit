@@ -34,6 +34,8 @@ describe("edit merge fallback", () => {
         ctx,
       );
 
+      expect(editResult.content[0].text).toContain("[RELOCATED]");
+
       // File should have both changes: L8 (from agent) and X (from external)
       const finalContent = readFileSync(path, "utf-8");
       expect(finalContent).toBe("X\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nL8\nl9\nl10\n");

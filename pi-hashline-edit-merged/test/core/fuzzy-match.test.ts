@@ -83,6 +83,15 @@ describe("fuzzyMatch", () => {
     expect(result.warnings).toContain("[RELOCATED] 1 range(s) relocated via hash matching. Please review the diff carefully.");
   });
 
+  it("leaves absent hashes unmatched for snapshot merge", () => {
+    const current = buildHashlineFile("a\nb\n");
+    const result = fuzzyMatch([
+      { op: "replace", pos: { hash: "ZZZ" }, end: { hash: "ZZZ" }, lines: ["X"] },
+    ], current);
+    expect(result.matched).toHaveLength(0);
+    expect(result.unmatched).toHaveLength(1);
+  });
+
   it("relocates when file shifts up by external deletion", () => {
     // Original: a b c d e
     // External deletes "a"

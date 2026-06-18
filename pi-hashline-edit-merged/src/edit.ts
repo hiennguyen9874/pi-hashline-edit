@@ -18,6 +18,13 @@ import { formatDiffResult } from "./edit-diff-render";
 import { applyMutation } from "./mutation";
 import { isRecord } from "./runtime";
 import { ensureHasherReady } from "./hash-format";
+import { normalizeEditRequest } from "./edit-normalize";
+import {
+  consumeDoomLoopWarning,
+  formatDoomLoopMessage,
+  globalDoomLoopState,
+  recordToolCall,
+} from "./doom-loop";
 
 const editEntrySchema = Type.Object(
   {
@@ -444,24 +451,48 @@ const editToolDefinition: EditToolDefinition = {
   },
 
   async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-    assertEditRequest(params);
-
+    recordToolCall(globalDoomLoopState, "edit", _toolCallId, params as Record<string, unknown>);
     await ensureHasherReady();
 
-    const path = (params as EditRequestParams).path;
-    const absolutePath = resolveToCwd(path, ctx.cwd);
-    const toolEdits = normalizeEditItems(
-      (params as EditRequestParams).edits,
-    );
+    if (!isRecord(params) || typeof params.path !== "string" || params.path.length === 0) {
+      assertEditRequest(params);
+    }
 
-    return applyMutation({
+    const rawPath = (params as { path: string }).path;
+    const absolutePath = resolveToCwd(rawPath, ctx.cwd);
+    let request = params as EditRequestParams;
+    let normalizationWarnings: string[] = [];
+
+    if (!Array.isArray((params as Record<string, unknown>).edits)) {
+      const target = await resolveEditTarget(absolutePath, rawPath, constants.R_OK);
+      if (!target.ok) {
+        const prefix = target.code ? `[${target.code}] ` : "";
+        throw new Error(`${prefix}${target.error}`);
+      }
+      const normalized = normalizeEditRequest(params, target.normalized);
+      request = { path: normalized.path, edits: normalized.edits };
+      normalizationWarnings = normalized.warnings;
+    } else {
+      assertEditRequest(params);
+    }
+
+    const path = request.path;
+    const toolEdits = normalizeEditItems(request.edits);
+
+    const result = await applyMutation({
       pi: _editPi,
       path,
       absolutePath,
       toolEdits,
       signal,
       ctx,
+      initialWarnings: normalizationWarnings,
     });
+    const warning = consumeDoomLoopWarning(globalDoomLoopState, _toolCallId);
+    if (warning) {
+      result.content[0]!.text += `\n\n${formatDoomLoopMessage(warning)}`;
+    }
+    return result;
   },
 };
 

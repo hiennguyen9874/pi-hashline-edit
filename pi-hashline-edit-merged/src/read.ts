@@ -20,6 +20,12 @@ import { throwIfAborted } from "./runtime";
 import { getFileSnapshot } from "./snapshot";
 import { PACKAGE_INFO } from "./package-info";
 import { setReadSnapshot } from "./read-snapshot";
+import {
+  consumeDoomLoopWarning,
+  formatDoomLoopMessage,
+  globalDoomLoopState,
+  recordToolCall,
+} from "./doom-loop";
 
 const READ_DESC = readFileSync(
   new URL("../tool-descriptions/read.md", import.meta.url),
@@ -163,6 +169,7 @@ export function registerReadTool(pi: ExtensionAPI): void {
     }),
 
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      recordToolCall(globalDoomLoopState, "read", _toolCallId, params as Record<string, unknown>);
       const rawPath = params.path;
       const absolutePath = resolveToCwd(rawPath, ctx.cwd);
 
@@ -231,8 +238,13 @@ export function registerReadTool(pi: ExtensionAPI): void {
         ? `${preview.text}\n\n[Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]`
         : preview.text;
 
+      const warning = consumeDoomLoopWarning(globalDoomLoopState, _toolCallId);
+      const resultText = warning
+        ? `${previewText}\n\n${formatDoomLoopMessage(warning)}`
+        : previewText;
+
       return {
-        content: [{ type: "text", text: previewText }],
+        content: [{ type: "text", text: resultText }],
         details: {
           truncation: preview.truncation,
           // snapshotId remains in details for host UI (e.g. "file changed since
