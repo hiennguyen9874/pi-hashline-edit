@@ -23,7 +23,7 @@ import {
 const insertEntrySchema = Type.Object(
   {
     anchor: Type.String({
-      description: "3-character hash anchor copied from read output; no line number or content",
+      description: "3-character hash anchor copied from read output; in LINE#HASH│content, use only HASH",
     }),
     direction: Type.String({
       enum: ["after", "before"],

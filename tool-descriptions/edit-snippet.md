@@ -1,1 +1,1 @@
-Replace/delete text via 3-character hash anchors from read. Use insert for pure additions. Copy only the 3-character hash before │.
+Replace/delete text via 3-character hash anchors from read. Use insert for pure additions. In LINE#HASH│content, copy only HASH.

@@ -7,10 +7,10 @@ Each edit deletes the inclusive anchor range and replaces it with exactly `lines
 { "start": "aB3", "end": "aB3", "lines": [...] }
 ```
 - `start` / `end`: 3-character hash anchors. Use the same hash for one line.
-- `lines`: replacement file content, not HASH│ output. Copy any original lines you want to keep. Use `[]` to delete.
+- `lines`: replacement file content, not rendered hashline output. Copy any original lines you want to keep. Use `[]` to delete.
 - `current`: optional exact current line text for single-line replacements.
 
 Rules:
-- Copy only the 3-character hash before │. Do not include line numbers, #, │, or content.
+- Copy only the 3-character hash. In `LINE#HASH│content`, use only `HASH`; do not include line numbers, #, │, or content.
 - Do not guess anchors; copy them from the latest `read` or successful edit diff.
 - Do not emit overlapping or adjacent edits — merge them into one.

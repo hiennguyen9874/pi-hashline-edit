@@ -28,28 +28,34 @@ describe("formatHashlineReadPreview", () => {
     expect(result.truncation?.firstLineExceedsLimit).toBe(true);
   });
 
-  it("formats ordinary lines as hash-only hashlines", () => {
+  it("formats ordinary lines as line-hash hashlines by default", () => {
     const result = formatHashlineReadPreview("alpha\nbeta", { offset: 1 });
 
-    expect(result.text).toMatch(/^[A-Za-z0-9_\-]{3}│alpha\n[A-Za-z0-9_\-]{3}│beta$/);
-    expect(result.text).not.toContain("1#");
+    expect(result.text).toMatch(/^1#[A-Za-z0-9_\-]{3}│alpha\n2#[A-Za-z0-9_\-]{3}│beta$/);
   });
 
-  it("supports padded line-number display through PI_HASHLINE_ANCHOR_DISPLAY", () => {
-    process.env.PI_HASHLINE_ANCHOR_DISPLAY = "line-hash";
+  it("supports hash-only display through PI_HASHLINE_ANCHOR_DISPLAY", () => {
+    process.env.PI_HASHLINE_ANCHOR_DISPLAY = "hash";
     try {
-      const allLines = Array.from({ length: 10 }, (_, index) => `line-${index + 1}`);
-      const text = allLines.join("\n");
-      const result = formatHashlineReadPreview(text, { offset: 8 });
+      const result = formatHashlineReadPreview("alpha\nbeta", { offset: 1 });
 
-      expect(result.text.split("\n").slice(0, 3)).toEqual([
-        ` 8#${computeLineHash(allLines, 7)}│line-8`,
-        ` 9#${computeLineHash(allLines, 8)}│line-9`,
-        `10#${computeLineHash(allLines, 9)}│line-10`,
-      ]);
+      expect(result.text).toMatch(/^[A-Za-z0-9_\-]{3}│alpha\n[A-Za-z0-9_\-]{3}│beta$/);
+      expect(result.text).not.toContain("1#");
     } finally {
       delete process.env.PI_HASHLINE_ANCHOR_DISPLAY;
     }
+  });
+
+  it("pads line numbers in default line-hash display", () => {
+    const allLines = Array.from({ length: 10 }, (_, index) => `line-${index + 1}`);
+    const text = allLines.join("\n");
+    const result = formatHashlineReadPreview(text, { offset: 8 });
+
+    expect(result.text.split("\n").slice(0, 3)).toEqual([
+      ` 8#${computeLineHash(allLines, 7)}│line-8`,
+      ` 9#${computeLineHash(allLines, 8)}│line-9`,
+      `10#${computeLineHash(allLines, 9)}│line-10`,
+    ]);
   });
 
   it("returns an advisory for empty files instead of a synthetic empty-line anchor", () => {
@@ -63,9 +69,7 @@ describe("formatHashlineReadPreview", () => {
   it("hides the terminal newline sentinel from preview output", () => {
     const result = formatHashlineReadPreview("alpha\nbeta\n", { offset: 1 });
 
-    expect(result.text).toMatch(/^[A-Za-z0-9_\-]{3}│alpha\n[A-Za-z0-9_\-]{3}│beta$/);
-    expect(result.text).not.toContain("1#");
-    expect(result.text).not.toContain("2#");
+    expect(result.text).toMatch(/^1#[A-Za-z0-9_\-]{3}│alpha\n2#[A-Za-z0-9_\-]{3}│beta$/);
     expect(result.text).not.toContain("3#");
     expect(result.text).not.toContain("2 lines total");
   });
@@ -102,43 +106,38 @@ describe("formatHashlineReadPreview", () => {
     const text = "same\nsame\nother\nsame";
     const file = buildHashlineFile(text);
     const preview = formatHashlineReadPreview(text, {}).text;
-    const displayedHashes = preview.split("\n").map((line) => line.slice(0, 3));
+    const displayedHashes = preview.split("\n").map((line) => line.split("#", 2)[1]!.slice(0, 3));
 
     expect(displayedHashes).toEqual(file.lineHashes);
   });
 });
 
 describe("formatHashlineRegion", () => {
-  it("formats lines with HASH anchors by default", () => {
+  it("formats lines with LINE#HASH anchors by default", () => {
     const fileLines = ["", "", "", "", "alpha", "beta", "gamma"];
     const result = formatHashlineRegion(fileLines, 5, 7);
 
     expect(result).toBe(
-      `${computeLineHash(fileLines, 4)}│alpha\n` +
-      `${computeLineHash(fileLines, 5)}│beta\n` +
-      `${computeLineHash(fileLines, 6)}│gamma`,
+      `5#${computeLineHash(fileLines, 4)}│alpha\n` +
+      `6#${computeLineHash(fileLines, 5)}│beta\n` +
+      `7#${computeLineHash(fileLines, 6)}│gamma`,
     );
   });
 
-  it("pads region line numbers in line-hash display mode", () => {
-    process.env.PI_HASHLINE_ANCHOR_DISPLAY = "line-hash";
-    try {
-      const fileLines = ["", "", "", "", "", "", "", "alpha", "beta", "gamma"];
-      const result = formatHashlineRegion(fileLines, 8, 10);
+  it("pads region line numbers in default line-hash display mode", () => {
+    const fileLines = ["", "", "", "", "", "", "", "alpha", "beta", "gamma"];
+    const result = formatHashlineRegion(fileLines, 8, 10);
 
-      expect(result).toBe(
-        ` 8#${computeLineHash(fileLines, 7)}│alpha\n` +
-        ` 9#${computeLineHash(fileLines, 8)}│beta\n` +
-        `10#${computeLineHash(fileLines, 9)}│gamma`,
-      );
-    } finally {
-      delete process.env.PI_HASHLINE_ANCHOR_DISPLAY;
-    }
+    expect(result).toBe(
+      ` 8#${computeLineHash(fileLines, 7)}│alpha\n` +
+      ` 9#${computeLineHash(fileLines, 8)}│beta\n` +
+      `10#${computeLineHash(fileLines, 9)}│gamma`,
+    );
   });
 
   it("handles a single line", () => {
     const result = formatHashlineRegion(["hello"], 1, 1);
-    expect(result).toBe(`${computeLineHash(["hello"], 0)}│hello`);
+    expect(result).toBe(`1#${computeLineHash(["hello"], 0)}│hello`);
   });
 
   it("handles empty array", () => {

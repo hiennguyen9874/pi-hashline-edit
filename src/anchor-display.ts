@@ -3,7 +3,7 @@ export const CONTENT_SEP = "│";
 export type AnchorDisplayMode = "hash" | "line-hash";
 
 export function getAnchorDisplayMode(): AnchorDisplayMode {
-  return process.env.PI_HASHLINE_ANCHOR_DISPLAY === "line-hash" ? "line-hash" : "hash";
+  return process.env.PI_HASHLINE_ANCHOR_DISPLAY === "hash" ? "hash" : "line-hash";
 }
 
 export function formatAnchorPrefix(input: { line: number; hash: string; lineNumberWidth?: number }): string {

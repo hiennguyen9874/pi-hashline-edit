@@ -46,7 +46,7 @@ const editEntrySchema = Type.Object(
 const hashlineEditSchemaProperties = {
   path: Type.String({ description: "path" }),
   edits: Type.Optional(Type.Array(editEntrySchema, {
-    description: "Edits to apply to $path. Copy only the 3-character hash before │. Do not include line numbers, #, │, or content.",
+    description: "Edits to apply to $path. In LINE#HASH│content, copy only HASH. Do not include line numbers, #, │, or content.",
   })),
 };
 

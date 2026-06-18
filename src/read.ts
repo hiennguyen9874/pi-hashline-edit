@@ -163,7 +163,7 @@ export function registerReadTool(pi: ExtensionAPI): void {
       ),
       raw: Type.Optional(
         Type.Boolean({
-          description: "Return raw text without HASH anchors, saving tokens. Don't use if you plan to edit this file.",
+          description: "Return raw text without hashline anchors, saving tokens. Don't use if you plan to edit this file.",
         }),
       ),
     }),

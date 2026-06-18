@@ -1,1 +1,1 @@
-Read a text file with HASH│content anchors for edit
+Read a text file with LINE#HASH│content anchors; use LINE for offset/limit and HASH for edit

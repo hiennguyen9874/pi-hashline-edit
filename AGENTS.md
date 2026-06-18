@@ -17,8 +17,8 @@ Do not add readmap-style `ls`, `find`, `ast_search`, NuShell, bash compression, 
 
 ## Protocol invariants
 
-- Default read output is `HASH│content` with a 3-character base64url hash.
-- Optional line-number display is controlled by `PI_HASHLINE_ANCHOR_DISPLAY=line-hash` and prints `LINE#HASH│content`.
+- Default read output is `LINE#HASH│content` with a 3-character base64url hash and display-only line number.
+- Legacy hash-only display is controlled by `PI_HASHLINE_ANCHOR_DISPLAY=hash` and prints `HASH│content`.
 - `edit` and `insert` accept hash-only anchors; line-qualified anchors are display-only and rejected by mutating tools.
 - Hashes are computed through one perfect per-file hash array; do not recompute call-site-specific anchors.
 

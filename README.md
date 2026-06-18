@@ -32,15 +32,15 @@ Enable optional extensions explicitly:
 
 ## `read`
 
-Text files are returned as `HASH│content` by default:
+Text files are returned as `LINE#HASH│content` by default:
 
 ```text
-aB3│function hello() {
-xY7│  console.log("world");
-qR9│}
+1#aB3│function hello() {
+2#xY7│  console.log("world");
+3#qR9│}
 ```
 
-Copy only the 3-character hash before `│`; do not include `│`, content, line numbers, or `#`.
+Use the line number before `#` for `offset`/`limit`. Copy only the 3-character hash between `#` and `│`; do not include `│`, content, line numbers, or `#`.
 
 Parameters:
 - `path` — file path to read.
@@ -48,7 +48,7 @@ Parameters:
 - `limit` — optional maximum number of lines.
 - `raw` — returns plain text without anchors. Do not use `raw` if you plan to edit.
 
-For debugging, `PI_HASHLINE_ANCHOR_DISPLAY=line-hash` displays `LINE#HASH│content`, but mutating tools still accept only hash-only anchors.
+Set `PI_HASHLINE_ANCHOR_DISPLAY=hash` to display legacy `HASH│content`; mutating tools still accept only hash-only anchors.
 
 ## `edit`
 
@@ -65,7 +65,7 @@ Replace an inclusive range using hash-only anchors:
 
 - `start` and `end` are 3-character hashes from a fresh `read` or successful edit diff.
 - Use the same hash for a single-line replacement.
-- `lines` must be literal file content, not rendered `HASH│content` output.
+- `lines` must be literal file content, not rendered hashline output.
 - Use `[]` to delete the range.
 
 ## `insert`

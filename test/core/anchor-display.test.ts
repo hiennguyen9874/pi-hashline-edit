@@ -9,20 +9,20 @@ describe("anchor-display", () => {
     else process.env.PI_HASHLINE_ANCHOR_DISPLAY = original;
   });
 
-  it("defaults to hash-only display", () => {
+  it("defaults to line-hash display", () => {
     delete process.env.PI_HASHLINE_ANCHOR_DISPLAY;
-    expect(getAnchorDisplayMode()).toBe("hash");
-    expect(formatAnchorPrefix({ line: 42, hash: "aB3" })).toBe(`aB3${CONTENT_SEP}`);
-  });
-
-  it("supports line-hash display through env", () => {
-    process.env.PI_HASHLINE_ANCHOR_DISPLAY = "line-hash";
     expect(getAnchorDisplayMode()).toBe("line-hash");
     expect(formatAnchorPrefix({ line: 42, hash: "aB3" })).toBe(`42#aB3${CONTENT_SEP}`);
   });
 
-  it("treats unknown env values as hash-only", () => {
-    process.env.PI_HASHLINE_ANCHOR_DISPLAY = "verbose";
+  it("supports hash-only display through env", () => {
+    process.env.PI_HASHLINE_ANCHOR_DISPLAY = "hash";
     expect(getAnchorDisplayMode()).toBe("hash");
+    expect(formatAnchorPrefix({ line: 42, hash: "aB3" })).toBe(`aB3${CONTENT_SEP}`);
+  });
+
+  it("treats unknown env values as line-hash", () => {
+    process.env.PI_HASHLINE_ANCHOR_DISPLAY = "verbose";
+    expect(getAnchorDisplayMode()).toBe("line-hash");
   });
 });
