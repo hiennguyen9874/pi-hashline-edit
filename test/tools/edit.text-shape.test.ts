@@ -197,41 +197,61 @@ describe("edit tool text shape (token budget)", () => {
   });
 
   it("normalizes legacy oldText/newText only when oldText is exact and unique", async () => {
-    await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd, path }) => {
-      const { pi, getTool } = makeFakePiRegistry();
-      registerCore(pi);
-      const editTool = getTool("edit");
+    const previous = process.env.PI_HASHLINE_EDIT_COMPAT;
+    process.env.PI_HASHLINE_EDIT_COMPAT = "1";
+    try {
+      await withTempFile("sample.ts", "alpha\nbeta\n", async ({ cwd, path }) => {
+        const { pi, getTool } = makeFakePiRegistry();
+        registerCore(pi);
+        const editTool = getTool("edit");
 
-      const result = await editTool.execute(
-        "e1",
-        { path: "sample.ts", oldText: "beta", newText: "BETA" } as any,
-        undefined,
-        undefined,
-        { cwd } as any,
-      );
-
-      expect(result.isError).not.toBe(true);
-      expect(result.content[0].text).toContain("[LEGACY_NORMALIZED]");
-      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\n");
-    });
-  });
-
-  it("rejects non-unique legacy oldText", async () => {
-    await withTempFile("sample.ts", "beta\nbeta\n", async ({ cwd }) => {
-      const { pi, getTool } = makeFakePiRegistry();
-      registerCore(pi);
-      const editTool = getTool("edit");
-
-      await expect(
-        editTool.execute(
+        const result = await editTool.execute(
           "e1",
           { path: "sample.ts", oldText: "beta", newText: "BETA" } as any,
           undefined,
           undefined,
           { cwd } as any,
-        ),
-      ).rejects.toThrow(/E_LEGACY_NON_UNIQUE/);
-    });
+        );
+
+        expect(result.isError).not.toBe(true);
+        expect(result.content[0].text).toContain("[LEGACY_NORMALIZED]");
+        expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\n");
+      });
+    } finally {
+      if (previous === undefined) {
+        delete process.env.PI_HASHLINE_EDIT_COMPAT;
+      } else {
+        process.env.PI_HASHLINE_EDIT_COMPAT = previous;
+      }
+    }
+  });
+
+  it("rejects non-unique legacy oldText when compatibility is enabled", async () => {
+    const previous = process.env.PI_HASHLINE_EDIT_COMPAT;
+    process.env.PI_HASHLINE_EDIT_COMPAT = "1";
+    try {
+      await withTempFile("sample.ts", "beta\nbeta\n", async ({ cwd }) => {
+        const { pi, getTool } = makeFakePiRegistry();
+        registerCore(pi);
+        const editTool = getTool("edit");
+
+        await expect(
+          editTool.execute(
+            "e1",
+            { path: "sample.ts", oldText: "beta", newText: "BETA" } as any,
+            undefined,
+            undefined,
+            { cwd } as any,
+          ),
+        ).rejects.toThrow(/E_LEGACY_NON_UNIQUE/);
+      });
+    } finally {
+      if (previous === undefined) {
+        delete process.env.PI_HASHLINE_EDIT_COMPAT;
+      } else {
+        process.env.PI_HASHLINE_EDIT_COMPAT = previous;
+      }
+    }
   });
 
   it("caps model-visible fresh anchors for large replacements", async () => {

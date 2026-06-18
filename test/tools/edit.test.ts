@@ -3,7 +3,9 @@ import { readFile } from "fs/promises";
 import Ajv from "ajv";
 import {
   assertEditRequest,
+  getHashlineEditToolSchema,
   hashlineEditToolSchema,
+  legacyHashlineEditToolSchema,
   registerEditTool,
 } from "../../src/edit";
 import registerCore from "../../extensions/core";
@@ -61,7 +63,7 @@ describe("registerEditTool", () => {
     ).toBe(false);
   });
 
-  it("publishes a schema that validates legacy oldText/newText payloads", () => {
+  it("rejects legacy oldText/newText payloads by default", () => {
     const ajv = new Ajv({ allErrors: true });
     const validate = ajv.compile(hashlineEditToolSchema as any);
 
@@ -71,7 +73,32 @@ describe("registerEditTool", () => {
         oldText: "before",
         newText: "after",
       }),
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("publishes legacy oldText/newText schema only when enabled", () => {
+    const previous = process.env.PI_HASHLINE_EDIT_COMPAT;
+    process.env.PI_HASHLINE_EDIT_COMPAT = "1";
+    try {
+      expect(getHashlineEditToolSchema()).toEqual(legacyHashlineEditToolSchema);
+
+      const ajv = new Ajv({ allErrors: true });
+      const validate = ajv.compile(getHashlineEditToolSchema() as any);
+
+      expect(
+        validate({
+          path: "a.ts",
+          oldText: "before",
+          newText: "after",
+        }),
+      ).toBe(true);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.PI_HASHLINE_EDIT_COMPAT;
+      } else {
+        process.env.PI_HASHLINE_EDIT_COMPAT = previous;
+      }
+    }
   });
 
   it("registers the edit tool without a prepareArguments shim", () => {
@@ -96,24 +123,52 @@ describe("registerEditTool", () => {
     expect(registered?.prepareArguments).toBeUndefined();
   });
 
-  it("normalizes legacy oldText/newText through the registered tool path", async () => {
-    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+  it("rejects legacy oldText/newText through the registered tool path by default", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
       const { pi, getTool } = makeFakePiRegistry();
       registerEditTool(pi);
       const editTool = getTool("edit");
 
-      const result = await editTool.execute(
-        "e1",
-        { path: "sample.txt", oldText: "beta", newText: "BETA" },
-        undefined,
-        undefined,
-        { cwd } as any,
-      );
-
-      expect(result.isError).not.toBe(true);
-      expect(result.content[0].text).toContain("[LEGACY_NORMALIZED]");
-      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
+      await expect(
+        editTool.execute(
+          "e1",
+          { path: "sample.txt", oldText: "beta", newText: "BETA" },
+          undefined,
+          undefined,
+          { cwd } as any,
+        ),
+      ).rejects.toThrow(/unknown field "oldText"/);
     });
+  });
+
+  it("normalizes legacy oldText/newText through the registered tool path when enabled", async () => {
+    const previous = process.env.PI_HASHLINE_EDIT_COMPAT;
+    process.env.PI_HASHLINE_EDIT_COMPAT = "1";
+    try {
+      await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+        const { pi, getTool } = makeFakePiRegistry();
+        registerEditTool(pi);
+        const editTool = getTool("edit");
+
+        const result = await editTool.execute(
+          "e1",
+          { path: "sample.txt", oldText: "beta", newText: "BETA" },
+          undefined,
+          undefined,
+          { cwd } as any,
+        );
+
+        expect(result.isError).not.toBe(true);
+        expect(result.content[0].text).toContain("[LEGACY_NORMALIZED]");
+        expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
+      });
+    } finally {
+      if (previous === undefined) {
+        delete process.env.PI_HASHLINE_EDIT_COMPAT;
+      } else {
+        process.env.PI_HASHLINE_EDIT_COMPAT = previous;
+      }
+    }
   });
 
   it("edits a single line using hash-only start/end anchors", async () => {

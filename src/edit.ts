@@ -43,12 +43,21 @@ const editEntrySchema = Type.Object(
   },
   { additionalProperties: false },
 );
+const hashlineEditSchemaProperties = {
+  path: Type.String({ description: "path" }),
+  edits: Type.Optional(Type.Array(editEntrySchema, {
+    description: "Edits to apply to $path. Copy only the 3-character hash before │. Do not include line numbers, #, │, or content.",
+  })),
+};
+
 export const hashlineEditToolSchema = Type.Object(
+  hashlineEditSchemaProperties,
+  { additionalProperties: false },
+);
+
+export const legacyHashlineEditToolSchema = Type.Object(
   {
-    path: Type.String({ description: "path" }),
-    edits: Type.Optional(Type.Array(editEntrySchema, {
-      description: "Edits to apply to $path. Copy only the 3-character hash before │. Do not include line numbers, #, │, or content.",
-    })),
+    ...hashlineEditSchemaProperties,
     oldText: Type.Optional(Type.String({ description: "Exact unique text to replace. Compatibility only; hash anchors are preferred." })),
     newText: Type.Optional(Type.String({ description: "Replacement text. Compatibility only; hash anchors are preferred." })),
     old_text: Type.Optional(Type.String({ description: "Exact unique text to replace. Compatibility only; hash anchors are preferred." })),
@@ -56,6 +65,17 @@ export const hashlineEditToolSchema = Type.Object(
   },
   { additionalProperties: false },
 );
+
+export function isLegacyEditCompatEnabled(): boolean {
+  const value = process.env.PI_HASHLINE_EDIT_COMPAT;
+  return value === "1" || value === "true";
+}
+
+export function getHashlineEditToolSchema(): typeof hashlineEditToolSchema {
+  return isLegacyEditCompatEnabled()
+    ? legacyHashlineEditToolSchema as typeof hashlineEditToolSchema
+    : hashlineEditToolSchema;
+}
 
 
 type EditRequestParams = {
@@ -495,6 +515,9 @@ const editToolDefinition: EditToolDefinition = {
     let normalizationWarnings: string[] = [];
 
     if (!Array.isArray((params as Record<string, unknown>).edits)) {
+      if (!isLegacyEditCompatEnabled()) {
+        assertEditRequest(params);
+      }
       const target = await resolveEditTarget(absolutePath, rawPath, constants.R_OK);
       if (!target.ok) {
         const prefix = target.code ? `[${target.code}] ` : "";
@@ -541,5 +564,6 @@ export function emitUndoSnapshot(
 
 export function registerEditTool(pi: ExtensionAPI): void {
   _editPi = pi;
+  editToolDefinition.parameters = getHashlineEditToolSchema();
   pi.registerTool(editToolDefinition);
 }
