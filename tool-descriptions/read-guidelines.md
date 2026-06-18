@@ -1,2 +1,5 @@
 - Use read before edit when you do not have current 3-character hash anchors for the file.
+- If an edit or insert result shows fresh anchors for the line you need, reuse those anchors for follow-up edits instead of calling read again.
 - If read is truncated, continue with the `offset` it suggests — do not guess unseen lines.
+- For simple file creation requests, write only the requested content unless the user asks for structure.
+- Preserve user-provided spelling and wording unless correction is explicitly requested.

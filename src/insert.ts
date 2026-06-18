@@ -77,6 +77,11 @@ const INSERT_DESC = readFileSync(
   "utf-8",
 ).trim();
 
+const INSERT_PROMPT_SNIPPET = readFileSync(
+  new URL("../tool-descriptions/insert-snippet.md", import.meta.url),
+  "utf-8",
+).trim();
+
 // ─── Normalization ──────────────────────────────────────────────────────
 
 
@@ -207,6 +212,7 @@ const insertToolDefinition: InsertToolDefinition = {
   name: "insert",
   label: "Insert",
   description: INSERT_DESC,
+  promptSnippet: INSERT_PROMPT_SNIPPET,
   parameters: insertToolSchema,
   renderShell: "default",
   renderCall(args, theme, context) {

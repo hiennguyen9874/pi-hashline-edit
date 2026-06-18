@@ -37,7 +37,7 @@ describe("edit tool text shape (token budget)", () => {
       expect(text).toContain("Classification: applied");
       expect(text).not.toContain(" 1#");
       expect(text).not.toContain("+2#");
-      expect(text).toContain("Fresh anchors:");
+      expect(text).toContain("Fresh anchors for follow-up edits:");
       expect(text).toContain("│BBB");
       expect(result.details?.diff).toContain("+2");
       expect(result.details?.diff).toContain("│BBB");

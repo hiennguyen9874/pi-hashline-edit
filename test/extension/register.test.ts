@@ -10,17 +10,21 @@ const packageJson = JSON.parse(
   readFileSync(new URL("../../package.json", import.meta.url), "utf-8"),
 );
 
-function collectTools(register: (pi: any) => void): string[] {
-  const toolNames: string[] = [];
+function collectToolDefinitions(register: (pi: any) => void): any[] {
+  const tools: any[] = [];
   const pi = {
-    registerTool(tool: { name: string }) {
-      toolNames.push(tool.name);
+    registerTool(tool: any) {
+      tools.push(tool);
     },
     on() {},
     events: { emit() {}, on() {} },
   };
   register(pi);
-  return toolNames;
+  return tools;
+}
+
+function collectTools(register: (pi: any) => void): string[] {
+  return collectToolDefinitions(register).map((tool) => tool.name);
 }
 
 describe("extension registration", () => {
@@ -35,8 +39,28 @@ describe("extension registration", () => {
     expect(collectTools(registerCore).sort()).toEqual(["edit", "read"]);
   });
 
+  it("read prompt guidelines encourage fresh-anchor reuse and minimal writes", () => {
+    const readTool = collectToolDefinitions(registerCore).find((tool) => tool.name === "read");
+
+    expect(readTool?.promptGuidelines).toContain(
+      "If an edit or insert result shows fresh anchors for the line you need, reuse those anchors for follow-up edits instead of calling read again.",
+    );
+    expect(readTool?.promptGuidelines).toContain(
+      "For simple file creation requests, write only the requested content unless the user asks for structure.",
+    );
+    expect(readTool?.promptGuidelines).toContain(
+      "Preserve user-provided spelling and wording unless correction is explicitly requested.",
+    );
+  });
+
   it("insert registers 'insert'", () => {
     expect(collectTools(registerInsert).sort()).toEqual(["insert"]);
+  });
+
+  it("insert contributes a prompt snippet", () => {
+    const insertTool = collectToolDefinitions(registerInsert).find((tool) => tool.name === "insert");
+
+    expect(insertTool?.promptSnippet).toContain("insert: Insert new lines");
   });
 
   it("undo remains available as an optional extension", () => {

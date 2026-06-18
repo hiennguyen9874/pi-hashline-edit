@@ -98,7 +98,7 @@ function changedAnchorsBlockOf(diff: string): string {
     if (anchors.length === 12) break;
   }
 
-  return anchors.length ? `Fresh anchors:\n${anchors.join("\n")}` : "";
+  return anchors.length ? `Fresh anchors for follow-up edits:\n${anchors.join("\n")}` : "";
 }
 
 // ─── Builders ───────────────────────────────────────────────────────────

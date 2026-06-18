@@ -1,0 +1,1 @@
+- insert: Insert new lines before or after an existing HASH anchor without changing existing lines. Use when you only need to add content.
