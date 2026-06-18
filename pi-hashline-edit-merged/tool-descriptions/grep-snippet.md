@@ -1,1 +1,1 @@
-Search file contents. Respects .gitignore. Returns LINE#HASH│content anchors.
+Search file contents. Respects .gitignore. Returns optional-tool display context; do not copy grep anchors into edit or insert.

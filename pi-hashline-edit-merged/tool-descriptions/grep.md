@@ -1,4 +1,4 @@
-Search file contents for a regex or literal pattern. Output is grouped by file and uses `LINE#HASH│content` anchors.
+Search file contents for a regex or literal pattern. Output is grouped by file. Grep output is optional-tool display context and should not be copied directly into mutating tools.
 
 Respects .gitignore by default.
 

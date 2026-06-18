@@ -45,5 +45,17 @@
 
 ## Required Fixes
 1. Remove or update stale `LINE#HASH│content` grep tool-description text, or update the Phase 3 plan to explicitly exclude optional grep descriptions until Phase 5.
+   - Status: fixed.
+   - Verification: `pi-hashline-edit-merged/tool-descriptions/grep.md` and `pi-hashline-edit-merged/tool-descriptions/grep-snippet.md` no longer advertise `LINE#HASH│content` anchors. Focused Phase 3 tests still pass.
 2. Migrate remaining legacy tests/callers from `range: [...]` and line-qualified anchors to `start`/`end` hash-only anchors, or document them as deferred Phase 4/5 work with an adjusted verification contract.
+   - Status: deferred.
+   - Severity: important.
+   - Reason: verified by full `npm test` failure, but the failures span legacy integration/edit/grep/fuzzy/read expectations outside the focused Phase 3 core suite. Migrating all of them is broader than a minimal Phase 3 review fix and overlaps optional grep/final-hardening scope.
 3. Re-run the focused Phase 3 suite and `npm test`; the focused suite should remain green and the full suite should either pass or have documented, phase-approved deferrals.
+   - Status: fixed for focused verification; deferred for full-suite green status.
+   - Verification: focused Phase 3 command passed 87 tests. Full `npm test` still fails with 55 failures from deferred legacy expectations.
+
+## Review Resolution Status
+- Fixed: stale grep model-visible descriptions that advertised `LINE#HASH│content` anchors.
+- Deferred: repository-wide legacy test/caller migration from `range: [...]` and line-qualified anchors to `start`/`end` hash-only anchors. This is verified and important, but not a minimal Phase 3 report fix.
+- Rejected: adding a registered-tool read test only for strict fixture-shape parity. Existing Phase 3 tests cover default hash-only output and line-hash display formatting; no behavior gap was verified.
