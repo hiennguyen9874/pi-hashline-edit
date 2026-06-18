@@ -1,8 +1,12 @@
 ![pi-hashline-edit](assets/banner.jpeg)
 
-# pi-hashline-edit
+# pi-hashline-edit-merged
 
-A fork of [pi-hashline-edit](https://github.com/RimuruW/pi-hashline-edit) with a trimmed edit schema, unified diff presentation, and extra safety guardrails. A [pi-coding-agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) extension.
+A focused merged hashline editor for pi with split tools and safety guardrails. A [pi-coding-agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) extension.
+
+Default extensions: `extensions/core.ts` and `extensions/insert.ts`.
+Optional extensions: `extensions/grep.ts` and `extensions/undo.ts`.
+`tool-usage` is intentionally not part of this merged package.
 
 Every line returned by `read` carries a short content hash. Edits reference these hashes instead of raw text, so the tool can detect stale context and reject outdated changes before they reach the file.
 
@@ -46,15 +50,11 @@ Each tool is its own extension file. The package ships all of them; enable or di
 }
 ```
 
-Available extensions: `extensions/core.ts`, `extensions/insert.ts`, `extensions/undo.ts`, `extensions/grep.ts`, `extensions/tool-usage.ts`.
+Available extensions: `extensions/core.ts`, `extensions/insert.ts`, `extensions/undo.ts`, `extensions/grep.ts`.
 
 Or use `pi config` to toggle them interactively.
 
 **Rule:** either keep `core.ts` enabled, plus any add-ons, or disable everything.
-
-### Slash commands
-
-`/tool-usage` — counts tool calls in the current session and shows which of our tools have zero usage. Helps decide which add-ons to keep.
 
 ## How It Works
 

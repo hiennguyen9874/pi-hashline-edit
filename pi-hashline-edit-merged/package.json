@@ -1,12 +1,12 @@
 {
-  "name": "@jerryan/pi-hashline-edit",
-  "version": "0.11.3",
-  "description": "Fork of pi-hashline-edit with trimmed schema, unified diff, and extra safety guardrails.",
+  "name": "pi-hashline-edit-merged",
+  "version": "0.1.0",
+  "description": "Focused merged hashline editor for pi with split tools and 3-character perfect anchors.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/JerryAZR/pi-hashline-edit.git"
   },
-  "author": "JerryAZR",
+  "author": "pi-hashline-edit-merged contributors",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
@@ -27,12 +27,14 @@
   ],
   "pi": {
     "extensions": [
-      "./extensions"
+      "./extensions/core.ts",
+      "./extensions/insert.ts"
     ]
   },
   "dependencies": {
     "diff": "^8.0.2",
-    "file-type": "^21.3.4"
+    "file-type": "^21.3.4",
+    "xxhash-wasm": "^1.1.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.74.0",
