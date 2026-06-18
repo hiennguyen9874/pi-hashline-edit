@@ -39,3 +39,24 @@
 2. Update stale/mismatch retry output and `read.raw` schema wording so mutating guidance consistently says to copy only the 3-character hash.
 3. Reconcile grep documentation with actual grep behavior: revert the Phase 3 grep description edits, or update grep implementation/tests in an explicitly approved scope expansion.
 4. Add focused tests for the above mismatches before considering Phase 3 complete.
+
+## Fix Status
+
+### Requirement Mismatches
+- **Displayed `read` anchors can differ from stored/resolved anchors for duplicate lines** — fixed. `formatHashlineRegion()` now accepts/uses the collision-resolved `lineHashes`, and `formatHashlineReadPreview()` passes the `buildHashlineFile(text).lineHashes` array used for read snapshots. Added duplicate-line regression tests.
+- **Stale/mismatch retry output still instructs `LINE#HASH` usage** — fixed. Retry guidance now says `HASH│content`, emits hash-only retry snippets, and tells callers to copy only the 3-character hash.
+- **`read.raw` schema still documents old anchors** — fixed. The schema text now says raw mode omits `HASH` anchors.
+
+### Plan Deviations
+- **Phase 3 commit steps were not performed** — rejected. This workspace has uncommitted Phase 3 work and the coding-agent instructions prohibit creating commits unless explicitly asked; no code fix is required.
+- **Grep documentation changed without grep implementation** — fixed by reverting the Phase 3 grep descriptions to match the current line-qualified grep implementation. Updating grep behavior remains Phase 5 scope.
+
+### Scope Creep / Missing Scope
+- **No test covers duplicate-line displayed-anchor correctness** — fixed. Added focused duplicate-line tests for `formatHashlineRegion()` and `formatHashlineReadPreview()`.
+- **Grep tool-description edits are outside Phase 3 scope** — fixed by reverting those documentation edits instead of expanding implementation scope.
+- **README still contains legacy `LINE#HASH` behavior** — deferred. The report notes README was not a Phase 3 target file; broad README migration belongs to the documentation phase unless explicitly requested earlier.
+
+### Tests vs Required Behavior
+- **Duplicate-line displayed-anchor coverage gap** — fixed.
+- **Stale-anchor retry message coverage gap** — fixed.
+- **Grep docs changed without grep behavior tests** — fixed by reverting grep docs to match existing behavior; no grep behavior change was made.

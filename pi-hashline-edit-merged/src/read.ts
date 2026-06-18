@@ -97,7 +97,9 @@ export function formatHashlineReadPreview(
     ? Math.min(startLine - 1 + limit, totalLines)
     : totalLines;
   const selected = allLines.slice(startLine - 1, endIdx);
-  const formatted = options.raw ? selected.join("\n") : formatHashlineRegion(allLines, startLine, endIdx);
+  const formatted = options.raw
+    ? selected.join("\n")
+    : formatHashlineRegion(allLines, startLine, endIdx, buildHashlineFile(text).lineHashes);
 
   const truncation = truncateHead(formatted);
   if (truncation.firstLineExceedsLimit) {
@@ -155,7 +157,7 @@ export function registerReadTool(pi: ExtensionAPI): void {
       ),
       raw: Type.Optional(
         Type.Boolean({
-          description: "Return raw text without LINE#HASH anchors, saving tokens. Don't use if you plan to edit this file.",
+          description: "Return raw text without HASH anchors, saving tokens. Don't use if you plan to edit this file.",
         }),
       ),
     }),

@@ -31,7 +31,7 @@ function applyHashlineEdits(content: string, edits: HashlineEdit[], signal?: Abo
     const retryLines = new Set(mismatches.map((m) => m.line));
     throw new Error(formatMismatchError(mismatches, file.lines, retryLines));
   }
-  const spanResult = resolveEditSpans(file, edits);
+  const spanResult = resolveEditSpans(file, exact.matched);
   if (!spanResult.ok) throw new Error(spanResult.message);
   const applied = applySpans(file, spanResult.spans);
   return {
@@ -54,7 +54,7 @@ describe("applyHashlineEdits — error handling", () => {
     const edits = [
       { op: "replace", pos: { line: 2, hash: "XX" }, lines: ["BBB"] },
     ];
-    expect(() => applyHashlineEdits(content, edits as any)).toThrow(/1 stale anchor: 2#XX\./);
+    expect(() => applyHashlineEdits(content, edits as any)).toThrow(/1 stale anchor: XX\./);
   });
 
   it("throws on out-of-range line", () => {
@@ -84,7 +84,7 @@ describe("applyHashlineEdits — error handling", () => {
       { op: "replace", pos: { line: 1, hash: "XX" }, lines: ["A"] },
       { op: "replace", pos: { line: 3, hash: "YY" }, lines: ["C"] },
     ];
-    expect(() => applyHashlineEdits(content, edits as any)).toThrow(/2 stale anchors: 1#XX, 3#YY\./);
+    expect(() => applyHashlineEdits(content, edits as any)).toThrow(/2 stale anchors: XX, YY\./);
   });
 
   it("range error takes priority over stale anchors", () => {
@@ -100,16 +100,16 @@ describe("applyHashlineEdits — error handling", () => {
     ];
     expect(() => applyHashlineEdits(content, edits as any)).toThrow(/must be <= end line/);
   });
-  it("mismatch message exposes retryable >>> LINE#HASH snippets", () => {
+  it("mismatch message exposes retryable hash-only snippets", () => {
     expect(() =>
       applyHashlineEdits("aaa", [
         {
           op: "replace",
-          pos: { line: 1, hash: "AB" },
+          pos: { line: 1, hash: "ABC" },
           lines: ["bbb"],
         } as any,
       ]),
-    ).toThrow(/>>> 1#[0-9A-F]{2}│aaa/);
+    ).toThrow(/Retry with the >>> HASH│content lines below[\s\S]*>>> [A-Za-z0-9_\-]{3}│aaa/);
   });
 
   it("retains still-valid range endpoints in retry snippets", () => {
@@ -131,6 +131,9 @@ describe("applyHashlineEdits — error handling", () => {
         throw error;
       }
       expect(error.message).toContain(
+        `>>> ${validEnd.hash}│eee`,
+      );
+      expect(error.message).not.toContain(
         `>>> ${validEnd.line}#${validEnd.hash}│eee`,
       );
     }
@@ -242,7 +245,7 @@ describe("integration: resolveEditAnchors → applyHashlineEdits", () => {
   it("full pipeline: tool-schema edit → resolve → apply", () => {
     const content = "aaa\nbbb\nccc";
     const fileLines = content.split("\n");
-    const tag2 = `2#${computeLineHash(fileLines, 1)}`;
+    const tag2 = computeLineHash(fileLines, 1);
     const toolEdits: HashlineToolEdit[] = [
       { op: "replace", pos: tag2, lines: ["BBB"] },
     ];
@@ -254,7 +257,7 @@ describe("integration: resolveEditAnchors → applyHashlineEdits", () => {
   it("full pipeline: string lines get parsed correctly", () => {
     const content = "aaa\nbbb\nccc";
     const fileLines = content.split("\n");
-    const tag2 = `2#${computeLineHash(fileLines, 1)}`;
+    const tag2 = computeLineHash(fileLines, 1);
     const toolEdits: HashlineToolEdit[] = [{ op: "replace", pos: tag2, lines: "BBB" }];
     const resolved = resolveEditAnchors(toolEdits);
     const result = applyHashlineEdits(content, resolved);
@@ -264,7 +267,7 @@ describe("integration: resolveEditAnchors → applyHashlineEdits", () => {
   it("full pipeline: null lines → delete", () => {
     const content = "aaa\nbbb\nccc";
     const fileLines = content.split("\n");
-    const tag2 = `2#${computeLineHash(fileLines, 1)}`;
+    const tag2 = computeLineHash(fileLines, 1);
     const toolEdits: HashlineToolEdit[] = [{ op: "replace", pos: tag2, lines: null }];
     const resolved = resolveEditAnchors(toolEdits);
     const result = applyHashlineEdits(content, resolved);
@@ -274,7 +277,7 @@ describe("integration: resolveEditAnchors → applyHashlineEdits", () => {
   it("full pipeline: hashline-prefixed string lines are rejected (no autocorrection)", () => {
     const content = "aaa\nbbb\nccc";
     const fileLines = content.split("\n");
-    const tag2 = `2#${computeLineHash(fileLines, 1)}│bbb`;
+    const tag2 = computeLineHash(fileLines, 1);
     const hash = computeLineHash(["BBB"], 0);
     const toolEdits: HashlineToolEdit[] = [
       { op: "replace", pos: tag2, lines: `2#${hash}│BBB` },
@@ -282,24 +285,22 @@ describe("integration: resolveEditAnchors → applyHashlineEdits", () => {
     expect(() => resolveEditAnchors(toolEdits)).toThrow(/^\[E_INVALID_PATCH\]/);
   });
 
-  it("full pipeline: copied full-line anchor rejects fuzzy textHint when hash is arbitrary", () => {
+  it("full pipeline: copied full-line anchor is rejected before fuzzy text hints", () => {
     const line = 'he said "hi"';
-    const content = `${line}\nkeep`;
     const actualHash = computeLineHash([line], 0);
-    const arbitraryHash = actualHash === "AB" ? "CD" : "AB";
+    const arbitraryHash = actualHash === "ABC" ? "DEF" : "ABC";
     const staleWithHint = `1#${arbitraryHash}│${line}`;
     const toolEdits: HashlineToolEdit[] = [
       { op: "replace", pos: staleWithHint, lines: ["HELLO"] },
     ];
-    const resolved = resolveEditAnchors(toolEdits);
 
-    expect(() => applyHashlineEdits(content, resolved)).toThrow(/stale anchor/);
+    expect(() => resolveEditAnchors(toolEdits)).toThrow(/Use the hash alone/);
   });
 
   it("full pipeline: copied diff-preview hunks are rejected (no autocorrection)", () => {
     const content = "aaa\nbbb\nccc";
-    const start = `1#${computeLineHash(["aaa"], 0)}`;
-    const end = `3#${computeLineHash(["ccc"], 0)}`;
+    const start = computeLineHash(["aaa"], 0);
+    const end = computeLineHash(["ccc"], 0);
     const replacement = [
       ` 1#${computeLineHash(["aaa"], 0)}│aaa`,
       "-2    bbb",

@@ -86,6 +86,14 @@ describe("hash-only hashline contract", () => {
     expect(text).not.toMatch(/^\s*1#/);
   });
 
+  it("formats duplicate lines with the stored collision-resolved hashes", () => {
+    const file = buildHashlineFile("same\nsame\nother\nsame");
+    const text = formatHashlineRegion(file.lines, 1, 4);
+    const displayedHashes = text.split("\n").map((line) => line.slice(0, 3));
+
+    expect(displayedHashes).toEqual(file.lineHashes);
+  });
+
   it("preserves internal spaces when hashing", () => {
     expect(computeLineHash(["a b"], 0)).not.toBe(computeLineHash(["ab"], 0));
   });

@@ -1,4 +1,4 @@
-Search file contents for a regex or literal pattern. Output is grouped by file and uses `HASH│content` format — the same default anchors the read tool produces. Copy only the 3-character hash before │ into edit or insert.
+Search file contents for a regex or literal pattern. Output is grouped by file and uses `LINE#HASH│content` anchors.
 
 Respects .gitignore by default.
 

@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import registerCore from "../../extensions/core";
-import { formatHashlineRegion } from "../../src/hashline";
+import { buildHashlineFile, computeLineHash, formatHashlineRegion } from "../../src/hashline";
 import { formatHashlineReadPreview } from "../../src/read";
-import { computeLineHash } from "../../src/hashline";
 import { ensureHasherReady } from "../../src/hash-format";
 import { makeFakePiRegistry, withTempFile } from "../support/fixtures";
 
@@ -96,6 +95,15 @@ describe("formatHashlineReadPreview", () => {
     expect(() =>
       formatHashlineReadPreview("alpha\nbeta", { limit: 0 }),
     ).toThrow(/limit.*positive integer/i);
+  });
+
+  it("displays duplicate lines with the same hashes stored in the read snapshot", () => {
+    const text = "same\nsame\nother\nsame";
+    const file = buildHashlineFile(text);
+    const preview = formatHashlineReadPreview(text, {}).text;
+    const displayedHashes = preview.split("\n").map((line) => line.slice(0, 3));
+
+    expect(displayedHashes).toEqual(file.lineHashes);
   });
 });
 

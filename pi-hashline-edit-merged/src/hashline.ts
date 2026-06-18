@@ -149,11 +149,10 @@ export function formatMismatchError(
   }
 
   const sorted = [...displayLines].sort((a, b) => a - b);
-  const maxDisplayLine = sorted[sorted.length - 1] ?? 1;
-  const lineNumberWidth = String(maxDisplayLine).length;
-  const anchorList = uniqueMismatches.map((m) => `${m.line}${ANCHOR_SEP}${m.expected}`).join(", ");
+  const lineHashes = computeLineHashes(fileLines.join("\n"));
+  const anchorList = uniqueMismatches.map((m) => m.expected).join(", ");
   const out: string[] = [
-    `[E_STALE_ANCHOR] ${uniqueMismatches.length} stale anchor${uniqueMismatches.length > 1 ? "s" : ""}: ${anchorList}. Retry with the >>> LINE${ANCHOR_SEP}HASH lines below; keep both endpoints for range replaces.`,
+    `[E_STALE_ANCHOR] ${uniqueMismatches.length} stale anchor${uniqueMismatches.length > 1 ? "s" : ""}: ${anchorList}. Retry with the >>> HASH${CONTENT_SEP}content lines below; copy only the 3-character hash before ${CONTENT_SEP} and keep both endpoints for range replaces.`,
     "",
   ];
 
@@ -162,12 +161,11 @@ export function formatMismatchError(
     if (prev !== -1 && num > prev + 1) out.push("    ...");
     prev = num;
     const content = fileLines[num - 1];
-    const hash = computeLineHash(fileLines, num - 1);
-    const prefix = `${String(num).padStart(lineNumberWidth, " ")}${ANCHOR_SEP}${hash}`;
+    const hash = lineHashes[num - 1] ?? computeLineHash(fileLines, num - 1);
     out.push(
       retryLineSet.has(num)
-        ? `>>> ${prefix}${CONTENT_SEP}${content}`
-        : `    ${prefix}${CONTENT_SEP}${content}`,
+        ? `>>> ${hash}${CONTENT_SEP}${content}`
+        : `    ${hash}${CONTENT_SEP}${content}`,
     );
   }
 
@@ -497,13 +495,14 @@ export function formatHashlineRegion(
   fileLines: readonly string[],
   startLine: number,
   endLine: number,
+  lineHashes: readonly string[] = computeLineHashes(fileLines.join("\n")),
 ): string {
   const lineNumberWidth = String(endLine).length;
   return fileLines
     .slice(startLine - 1, endLine)
     .map((line, index) => {
       const lineNumber = startLine + index;
-      const hash = computeLineHash(fileLines, startLine - 1 + index);
+      const hash = lineHashes[startLine - 1 + index] ?? computeLineHash(fileLines, startLine - 1 + index);
       return `${formatAnchorPrefix({ line: lineNumber, hash, lineNumberWidth })}${line}`;
     })
     .join("\n");
