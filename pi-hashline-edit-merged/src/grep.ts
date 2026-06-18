@@ -1,9 +1,8 @@
 /**
  * Grep tool with hashline output.
  *
- * Spawns ripgrep with --context to get surrounding lines from JSON events,
- * then formats results with hash-only anchors. No file reads needed —
- * all line content comes from rg's JSON output.
+ * Spawns ripgrep with --context to find matching line numbers,
+ * then formats results with hash-only anchors computed from the full file.
  */
 
 import { stat as fsStat } from "fs/promises";
@@ -16,10 +15,10 @@ import { Type } from "@sinclair/typebox";
 import { Text } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { resolveToCwd } from "./path-utils";
-import { normalizeLine, computeHashFromContext } from "./hashline";
+import { buildHashlineFile } from "./hashline";
 import { formatAnchorPrefix } from "./anchor-display";
 import { ensureHasherReady } from "./hash-format";
-import { stripBom } from "./edit-diff";
+import { normalizeToLF, stripBom } from "./edit-diff";
 
 // ─── Schema ───────────────────────────────────────────────────────────
 
@@ -83,20 +82,7 @@ async function getRgPath(): Promise<string | null> {
 
 interface LineEntry {
   lineNumber: number;
-  text: string;
   isMatch: boolean;
-}
-
-/**
- * Normalize a line from ripgrep JSON output to match hashline.ts normalizeLine.
- * rg includes the trailing line ending (\n or \r\n). We strip the BOM (first
- * line only), remove the trailing newline, then apply trimEnd to match
- * normalizeLine's behavior exactly.
- */
-function normalizeRgLine(raw: string, isFirstLine: boolean): string {
-  const noBom = isFirstLine ? stripBom(raw).text : raw;
-  const stripped = noBom.endsWith("\n") ? noBom.slice(0, -1) : noBom;
-  return normalizeLine(stripped);
 }
 
 function truncateLine(text: string): { text: string; truncated: boolean } {
@@ -195,9 +181,7 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
       let settled = false;
       const settle = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
 
-      // Request one extra context line for hash computation of the outermost
-      // displayed context lines (need prev/next neighbors).
-      const rgContext = agentContext + 1;
+      const rgContext = agentContext;
 
       const args: string[] = ["--json", "--line-number", "--color=never", "--hidden"];
       if (ignoreCase) args.push("--ignore-case");
@@ -224,7 +208,6 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
       // rg merges overlapping context windows — each line appears once.
       const fileEntries = new Map<string, LineEntry[]>();
       let currentFile = "";
-      let isFirstLine = true;
 
       rl.on("line", (raw) => {
         if (!raw.trim()) return;
@@ -234,14 +217,9 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
         if (event.type === "begin") {
           currentFile = event.data?.path?.text ?? "";
           fileEntries.set(currentFile, []);
-          isFirstLine = true;
         } else if (event.type === "match" || event.type === "context") {
           const num = event.data?.line_number;
-          const text = event.data?.lines?.text ?? "";
-          if (!num || !text) return;
-
-          const normalized = normalizeRgLine(text, isFirstLine);
-          isFirstLine = false;
+          if (!num) return;
 
           const entries = fileEntries.get(currentFile);
           if (!entries) return;
@@ -251,7 +229,7 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
           if (existing) {
             existing.isMatch = isMatch;
           } else {
-            entries.push({ lineNumber: num, text: normalized, isMatch });
+            entries.push({ lineNumber: num, isMatch });
           }
 
           if (event.type === "match") {
@@ -269,7 +247,7 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
         settle(() => rejectFn(new Error(`Failed to run ripgrep: ${error.message}`)));
       });
 
-      child.on("close", () => {
+      child.on("close", async () => {
         cleanup();
         if (aborted) { settle(() => rejectFn(new Error("Operation aborted"))); return; }
         if (!killedDueToLimit && child.exitCode !== 0 && child.exitCode !== 1) {
@@ -288,8 +266,16 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
           const relativePath = formatPath(filePath, searchPath, isDirectory);
           outputLines.push(`\n${relativePath}`);
 
-          // Build lineNumber → {text, isMatch} map for neighbor lookup
-          const lineMap = new Map(entries.map(e => [e.lineNumber, { text: e.text, isMatch: e.isMatch }]));
+          let file;
+          try {
+            const fullContent = normalizeToLF(stripBom(readFileSync(filePath, "utf-8")).text);
+            file = buildHashlineFile(fullContent);
+          } catch {
+            outputLines.push(`Cannot read matched file: ${filePath}`);
+            continue;
+          }
+
+          const lineMap = new Map(entries.map(e => [e.lineNumber, { isMatch: e.isMatch }]));
 
           // Collect match lines and build display ranges
           const matchNums = entries.filter(e => e.isMatch).map(e => e.lineNumber);
@@ -307,14 +293,14 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
             for (let cur = range.start; cur <= range.end; cur++) {
               const entry = lineMap.get(cur);
               if (!entry) continue;
-              const { text: lineText, truncated } = truncateLine(entry.text);
+              const originalLine = file.lines[cur - 1];
+              if (originalLine === undefined) continue;
+              const { text: lineText, truncated } = truncateLine(originalLine);
               if (truncated) linesTruncated = true;
 
-              const prev = lineMap.get(cur - 1)?.text ?? "";
-              const next = lineMap.get(cur + 1)?.text ?? "";
-              const hash = computeHashFromContext(prev, lineText, next);
+              const hash = file.lineHashes[cur - 1]!;
 
-              outputLines.push(`  ${formatAnchorPrefix({ line: cur, hash, lineNumberWidth: 4 })}${lineText}`);
+              outputLines.push(`${formatAnchorPrefix({ line: cur, hash, lineNumberWidth: 4 })}${lineText}`);
             }
             outputLines.push(""); // blank between blocks
           }

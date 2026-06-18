@@ -153,14 +153,12 @@ describe("snapshotId surface (details-only after W2)", () => {
         }
 
         expect(errorMessage).toMatch(/^\[E_STALE_ANCHOR\]/);
-        expect(errorMessage).toContain(
-          `    ${computeLineHash(["one", "TWO!", "three"], 1)}│TWO!`,
-        );
+        expect(errorMessage).toContain("Call read() to get fresh anchors.");
       },
     );
   });
 
-  it("de-duplicates identical stale anchors in single-line range [X, X]", async () => {
+  it("de-duplicates identical stale hash-only anchors in single-line edits", async () => {
     await withTempFile(
       "sample.txt",
       "one\ntwo\nthree\n",
@@ -192,11 +190,8 @@ describe("snapshotId surface (details-only after W2)", () => {
           errorMessage = error instanceof Error ? error.message : String(error);
         }
 
-        expect(errorMessage).toContain("1 stale anchor");
-        expect(errorMessage).not.toContain("2 stale anchors");
-        expect(errorMessage).toContain(
-          `    ${computeLineHash(["one", "TWO!", "three"], 1)}│TWO!`,
-        );
+        expect(errorMessage).toMatch(/^\[E_STALE_ANCHOR\] stale anchor "[A-Za-z0-9_\-]{3}"\./);
+        expect(errorMessage).not.toContain("stale anchors");
       },
     );
   });

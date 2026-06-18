@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { execSync } from "child_process";
-import { mkdtempSync, writeFileSync, rmSync } from "fs";
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { grepToolDefinition } from "../../src/grep";
@@ -57,6 +57,54 @@ describe("grep tool", () => {
 });
 
 describe("grep tool execution", () => {
+  it.skipIf(!rgAvailable)("returns hash-only anchors that can be used by edit", async () => {
+    const tmp = tempDir();
+    try {
+      tmp.add("sample.ts", "alpha\nbeta\ngamma\n");
+
+      const grepResult = await grepToolDefinition.execute(
+        "g1",
+        { pattern: "beta", path: join(tmp.dir, "sample.ts"), literal: true },
+        undefined,
+      );
+      const text = (grepResult as any).content[0].text;
+      const anchor = text.match(/^([A-Za-z0-9_\-]{3})│beta$/m)?.[1];
+      expect(anchor).toBeDefined();
+
+      const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
+      const editTool = getTool("edit");
+      const editResult = await editTool.execute(
+        "e1",
+        { path: "sample.ts", edits: [{ start: anchor!, end: anchor!, lines: ["BETA"] }] },
+        undefined, undefined, { cwd: tmp.dir, ui: { notify() {} } } as any,
+      );
+
+      expect(editResult.isError).not.toBe(true);
+      expect(readFileSync(join(tmp.dir, "sample.ts"), "utf-8")).toBe("alpha\nBETA\ngamma\n");
+    } finally {
+      tmp.cleanup();
+    }
+  });
+
+  it.skipIf(!rgAvailable)("does not emit line-qualified anchors by default", async () => {
+    const tmp = tempDir();
+    try {
+      tmp.add("sample.ts", "alpha\nbeta\n");
+
+      const result = await grepToolDefinition.execute(
+        "g1",
+        { pattern: "alpha", path: join(tmp.dir, "sample.ts"), literal: true },
+        undefined,
+      );
+
+      expect((result as any).content[0].text).toMatch(/^[A-Za-z0-9_\-]{3}│alpha/m);
+      expect((result as any).content[0].text).not.toMatch(/^\s*1#/m);
+    } finally {
+      tmp.cleanup();
+    }
+  });
+
   it.skipIf(!rgAvailable)("returns hashline-formatted matches", async () => {
     const tmp = tempDir();
     try {

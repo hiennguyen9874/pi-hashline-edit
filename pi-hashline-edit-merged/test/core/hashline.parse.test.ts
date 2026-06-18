@@ -41,24 +41,24 @@ describe("hashlineParseText", () => {
   });
 
   it("rejects array input that contains HASH display prefixes", () => {
-    expect(() => hashlineParseText(["aB3│foo", "xY7│bar"])).toThrow(/^\[E_INVALID_PATCH\]/);
+    expect(() => hashlineParseText(["aB3│foo", "xY7│bar"])).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
   });
 
   it("rejects diff-preview hunks with + and hash prefixes", () => {
     expect(() =>
       hashlineParseText(["aB3│keep", "+xY7│new", "qR2│after"]),
-    ).toThrow(/^\[E_INVALID_PATCH\]/);
+    ).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
   });
 
   it("rejects diff-preview deletion rows", () => {
     expect(() =>
       hashlineParseText(["aB3│keep", "-10    old", "qR2│after"]),
-    ).toThrow(/^\[E_INVALID_PATCH\]/);
+    ).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
   });
 
   it("rejects string-form rendered diff hunks", () => {
     const input = "aB3│keep\n-10    old\n+xY7│new\nqR2│after";
-    expect(() => hashlineParseText(input)).toThrow(/^\[E_INVALID_PATCH\]/);
+    expect(() => hashlineParseText(input)).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
   });
 });
 

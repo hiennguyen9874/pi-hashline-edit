@@ -39,8 +39,12 @@ describe("extension registration", () => {
     expect(collectTools(registerInsert).sort()).toEqual(["insert"]);
   });
 
-  it("undo registers 'undo'", () => {
+  it("undo remains available as an optional extension", () => {
     expect(collectTools(registerUndo).sort()).toEqual(["undo"]);
+  });
+
+  it("undo is not enabled by default in package metadata", () => {
+    expect(packageJson.pi.extensions).not.toContain("./extensions/undo.ts");
   });
 
   it("grep registers 'grep' if rg available", () => {

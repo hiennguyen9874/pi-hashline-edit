@@ -85,6 +85,6 @@ describe("resolveEditAnchors", () => {
     const edits = [
       { op: "replace" as const, pos: "abc", lines: ["abc│content"] },
     ];
-    expect(() => resolveEditAnchors(edits)).toThrow(/^\[E_INVALID_PATCH\]/);
+    expect(() => resolveEditAnchors(edits)).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
   });
 });
