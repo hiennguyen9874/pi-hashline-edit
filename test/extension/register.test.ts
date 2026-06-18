@@ -5,6 +5,7 @@ import registerCore from "../../extensions/core";
 import registerInsert from "../../extensions/insert";
 import registerUndo from "../../extensions/undo";
 import registerGrep from "../../extensions/grep";
+import registerFff from "../../extensions/fff";
 
 const packageJson = JSON.parse(
   readFileSync(new URL("../../package.json", import.meta.url), "utf-8"),
@@ -32,6 +33,7 @@ describe("extension registration", () => {
     expect(packageJson.pi.extensions).toEqual([
       "./extensions/core.ts",
       "./extensions/insert.ts",
+      "./extensions/fff.ts",
     ]);
   });
 
@@ -75,8 +77,8 @@ describe("extension registration", () => {
   it("insert contributes a prompt snippet", () => {
     const insertTool = collectToolDefinitions(registerInsert).find((tool) => tool.name === "insert");
 
-    expect(insertTool?.promptSnippet).toContain("insert: Insert new lines");
-    expect(insertTool?.promptSnippet).toContain("Use when you only need to add content.");
+    expect(insertTool?.promptSnippet).toContain("Insert new lines before or after an existing HASH anchor");
+    expect(insertTool?.promptSnippet).toContain("In LINE#HASH│content, copy only HASH.");
   });
 
   it("insert description encourages one call per file", () => {
@@ -88,6 +90,10 @@ describe("extension registration", () => {
     expect(insertTool?.parameters.properties.path.description).toBe(
       "Path to the UTF-8 text file to patch, relative or absolute.",
     );
+  });
+
+  it("fff registers fffind and ffgrep without overriding grep", () => {
+    expect(collectTools(registerFff).sort()).toEqual(["fffind", "ffgrep"]);
   });
 
   it("undo remains available as an optional extension", () => {

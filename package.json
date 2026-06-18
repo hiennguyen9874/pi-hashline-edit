@@ -1,7 +1,7 @@
 {
   "name": "pi-hashline-edit",
   "version": "0.1.0",
-  "description": "Focused merged hashline editor for pi with split tools and 3-character perfect anchors.",
+  "description": "Focused hashline editor for pi with FFF search and 3-character perfect anchors.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/JerryAZR/pi-hashline-edit.git"
@@ -28,10 +28,12 @@
   "pi": {
     "extensions": [
       "./extensions/core.ts",
-      "./extensions/insert.ts"
+      "./extensions/insert.ts",
+      "./extensions/fff.ts"
     ]
   },
   "dependencies": {
+    "@ff-labs/fff-node": "^0.9.5",
     "diff": "^8.0.2",
     "file-type": "^21.3.4",
     "xxhash-wasm": "^1.1.0"
