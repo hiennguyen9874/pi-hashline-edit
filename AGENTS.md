@@ -2,7 +2,7 @@
 
 ## What this is
 
-`pi-hashline-edit-merged` is a focused pi hashline editor derived from `JerryAZR-pi-hashline-edit`.
+`pi-hashline-edit` is a focused pi hashline editor derived from `JerryAZR-pi-hashline-edit`.
 
 Default tools:
 - `read`

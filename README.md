@@ -1,4 +1,4 @@
-# pi-hashline-edit-merged
+# pi-hashline-edit
 
 Focused merged hashline editor for pi with split tools, atomic writes, stale-anchor safety, and 3-character perfect anchors.
 
@@ -19,7 +19,7 @@ Enable optional extensions explicitly:
 ```json
 {
   "packages": [{
-    "source": "npm:pi-hashline-edit-merged",
+    "source": "npm:pi-hashline-edit",
     "extensions": [
       "extensions/core.ts",
       "extensions/insert.ts",

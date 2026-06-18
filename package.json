@@ -1,12 +1,12 @@
 {
-  "name": "pi-hashline-edit-merged",
+  "name": "pi-hashline-edit",
   "version": "0.1.0",
   "description": "Focused merged hashline editor for pi with split tools and 3-character perfect anchors.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/JerryAZR/pi-hashline-edit.git"
   },
-  "author": "pi-hashline-edit-merged contributors",
+  "author": "pi-hashline-edit contributors",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
