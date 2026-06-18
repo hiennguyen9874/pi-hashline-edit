@@ -44,4 +44,11 @@ describe("hash-format", () => {
     expect(computeLineHashes("alpha\nbeta\n")).toHaveLength(2);
     expect(computeLineHashes("")).toEqual([]);
   });
+
+  it("hashes deterministically after readiness is awaited", async () => {
+    await ensureHasherReady();
+    const first = computeLineHashes("same\ncontent\n}");
+    const second = computeLineHashes("same\ncontent\n}");
+    expect(second).toEqual(first);
+  });
 });
