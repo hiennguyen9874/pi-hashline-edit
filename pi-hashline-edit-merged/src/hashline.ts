@@ -5,14 +5,18 @@
  * Hash algorithm: inline FNV-1a with surrounding-line context.
  */
 
+import { computeLineHashes, computeLineHash as computeSingleLineHash, HASH_RE, HASH_CHARS_CLASS } from "./hash-format";
+import { ANCHOR_SEP, CONTENT_SEP, formatAnchorPrefix } from "./anchor-display";
+
 // --- Types ---
 
-export type Anchor = { line: number; hash: string; textHint?: string };
+export type Anchor = { hash: string; line?: number };
 export type HashlineEdit = {
   op: "replace" | "append" | "prepend";
   pos: Anchor;
   end?: Anchor;
   lines: string[];
+  current?: string;
 };
 
 interface HashMismatch {
@@ -36,66 +40,18 @@ export interface HashlineFile {
 
 // --- Hash computation ---
 
-const HEX = "0123456789ABCDEF";
-const HASH_ALPHABET_RE = /^[0-9A-F]+$/;
-
-const DICT = Array.from({ length: 256 }, (_, i) => {
-  const h = i >>> 4;
-  const l = i & 0x0f;
-  return `${HEX[h]}${HEX[l]}`;
-});
-
-export const ANCHOR_SEP = "#";
-export const CONTENT_SEP = "│";
-
-// FNV-1a 32-bit constants
-const FNV_OFFSET = 0x811c9dc5;
-const FNV_PRIME = 0x01000193;
+export { ANCHOR_SEP, CONTENT_SEP };
 
 export function normalizeLine(line: string): string {
   return line.replace(/\r/g, "").trimEnd();
 }
 
-/**
- * FNV-1a hash of prev + "\0" + curr + "\0" + next.
- * All three strings must already be normalized (no \r, trailing whitespace trimmed).
- */
-function fnvHash(prev: string, curr: string, next: string): string {
-  let hash = FNV_OFFSET;
-  for (let i = 0; i < prev.length; i++) {
-    hash = Math.imul(hash ^ prev.charCodeAt(i), FNV_PRIME);
-  }
-  hash = Math.imul(hash ^ 0, FNV_PRIME); // \0 delimiter
-  for (let i = 0; i < curr.length; i++) {
-    hash = Math.imul(hash ^ curr.charCodeAt(i), FNV_PRIME);
-  }
-  hash = Math.imul(hash ^ 0, FNV_PRIME); // \0 delimiter
-  for (let i = 0; i < next.length; i++) {
-    hash = Math.imul(hash ^ next.charCodeAt(i), FNV_PRIME);
-  }
-  return DICT[hash & 0xff];
-}
-
-/**
- * Compute a context hash for line at `index` (0-based) within `fileLines`.
- * The hash incorporates the line itself plus its immediate neighbors
- * (previous and next), so distant edits do not invalidate anchors.
- * Missing neighbors (file boundaries) contribute an empty string.
- */
 export function computeLineHash(fileLines: readonly string[], index: number): string {
-  const prev = index > 0 ? normalizeLine(fileLines[index - 1]!) : "";
-  const curr = normalizeLine(fileLines[index]!);
-  const next = index < fileLines.length - 1 ? normalizeLine(fileLines[index + 1]!) : "";
-  return fnvHash(prev, curr, next);
+  return computeSingleLineHash(fileLines[index] ?? "");
 }
 
-/**
- * Compute a context hash from already-normalized strings.
- * For callers that have pre-processed line text (e.g. from ripgrep output).
- * Calls the same underlying FNV-1a as computeLineHash.
- */
-export function computeHashFromContext(prev: string, curr: string, next: string): string {
-  return fnvHash(prev, curr, next);
+export function computeHashFromContext(_prev: string, curr: string, _next: string): string {
+  return computeSingleLineHash(curr);
 }
 
 export function buildHashlineFile(content: string): HashlineFile {
@@ -105,7 +61,10 @@ export function buildHashlineFile(content: string): HashlineFile {
       ? content.split("\n").slice(0, -1)
       : content.split("\n");
 
-  const lineHashes = lines.map((_, i) => computeLineHash(lines, i));
+  const lineHashes = computeLineHashes(content);
+  if (lineHashes.length !== lines.length) {
+    throw new Error("Hash count does not match visible line count.");
+  }
 
   const lineStarts: number[] = [];
   let offset = 0;
@@ -124,84 +83,34 @@ export function buildHashlineFile(content: string): HashlineFile {
  * file content. Matching any of these triggers `[E_INVALID_PATCH]`.
  */
 const HASHLINE_PREFIX_RE = new RegExp(
-  `^\\s*(?:>>>|>>)?\\s*(?:\\d+\\s*${ANCHOR_SEP}\\s*|${ANCHOR_SEP}\\s*)?[0-9A-F]{2}${CONTENT_SEP}`);
+  `^\\s*(?:>>>|>>)?\\s*(?:\\d+\\s*${ANCHOR_SEP}\\s*)?${HASH_CHARS_CLASS}${CONTENT_SEP}`);
 const HASHLINE_PREFIX_PLUS_RE = new RegExp(
-  `^\\+\\s*(?:\\d+\\s*${ANCHOR_SEP}\\s*|${ANCHOR_SEP}\\s*)?[0-9A-F]{2}${CONTENT_SEP}`);
+  `^\\+\\s*(?:\\d+\\s*${ANCHOR_SEP}\\s*)?${HASH_CHARS_CLASS}${CONTENT_SEP}`);
 const DIFF_MINUS_RE = /^-\s*\d+\s{4}/;
 
 // ─── Parsing ────────────────────────────────────────────────────────────
 
 function diagnoseLineRef(ref: string): string {
   const trimmed = ref.trim();
-  const core = ref.replace(/^\s*[>+-]*\s*/, "").trim();
-
-  if (!core.length) {
-    return `[E_BAD_REF] Invalid line reference "${ref}". Expected "LINE${ANCHOR_SEP}HASH" (e.g. "5${ANCHOR_SEP}MQ").`;
+  if (!trimmed.length) {
+    return `[E_BAD_REF] Invalid anchor. Expected a 3-character base64url hash such as "aB3".`;
   }
-  if (/^\d+\s*$/.test(core)) {
-    return `[E_BAD_REF] Invalid line reference "${ref}": missing hash, use "LINE${ANCHOR_SEP}HASH" from read output (e.g. "5${ANCHOR_SEP}MQ").`;
+  if (/^\d/.test(trimmed)) {
+    return `[E_BAD_REF] Invalid anchor "${trimmed}". Use the hash alone; line numbers are display-only.`;
   }
-  if (new RegExp(`^\d+\s*[:${CONTENT_SEP}]`).test(core)) {
-    return `[E_BAD_REF] Invalid line reference "${ref}": wrong separator, use "LINE${ANCHOR_SEP}HASH" instead of "LINE:..." or "LINE${CONTENT_SEP}...".`;
+  if (trimmed.includes(CONTENT_SEP)) {
+    return `[E_BAD_REF] Invalid anchor "${trimmed}". Copy only the 3-character hash before ${CONTENT_SEP}.`;
   }
-
-  const hashMatch = core.match(new RegExp(`^(\d+)\s*${ANCHOR_SEP}\s*([^\s${CONTENT_SEP}]+)(?:\s*${CONTENT_SEP}.*)?$`));
-  if (hashMatch) {
-    const line = Number.parseInt(hashMatch[1]!, 10);
-    const hash = hashMatch[2]!;
-    if (line < 1) {
-      return `[E_BAD_REF] Line number must be >= 1, got ${line} in "${ref}".`;
-    }
-    if (hash.length !== 2) {
-      return `[E_BAD_REF] Invalid line reference "${ref}": hash must be exactly 2 characters from 0-9 A-F.`;
-    }
-    if (!HASH_ALPHABET_RE.test(hash)) {
-      return `[E_BAD_REF] Invalid line reference "${ref}": hash uses invalid characters, hashes use alphabet 0-9 A-F only.`;
-    }
-  }
-
-  const missingHashMatch = core.match(new RegExp(`^(\d+)\s*${ANCHOR_SEP}\s*$`));
-  if (missingHashMatch) {
-    return `[E_BAD_REF] Invalid line reference "${ref}": missing hash after "${ANCHOR_SEP}", use "LINE${ANCHOR_SEP}HASH" from read output.`;
-  }
-
-  if (new RegExp(`^0+\s*${ANCHOR_SEP}`).test(core)) {
-    return `[E_BAD_REF] Line number must be >= 1, got 0 in "${ref}".`;
-  }
-
-  return `[E_BAD_REF] Invalid line reference "${trimmed || ref}". Expected "LINE${ANCHOR_SEP}HASH" (e.g. "5${ANCHOR_SEP}MQ").`;
+  return `[E_BAD_REF] Invalid anchor. Expected a 3-character base64url hash such as "aB3".`;
 }
 
 
 function parseAnchorRef(ref: string): Anchor {
-  const core = ref.replace(/^\s*[>+-]*\s*/, "").trimEnd();
-  const match = core.match(new RegExp(`^([0-9]+)\\s*${ANCHOR_SEP}\\s*([^\\s${CONTENT_SEP}]+)(?:\\s*${CONTENT_SEP}(.*))?$`, "s"));
-  if (!match) {
+  const trimmed = ref.trim();
+  if (!HASH_RE.test(trimmed)) {
     throw new Error(diagnoseLineRef(ref));
   }
-
-  const line = Number.parseInt(match[1]!, 10);
-  if (line < 1) {
-    throw new Error(`[E_BAD_REF] Line number must be >= 1, got ${line} in "${ref}".`);
-  }
-
-  const hash = match[2]!;
-  if (hash.length !== 2) {
-    throw new Error(`[E_BAD_REF] Invalid line reference "${ref}": hash must be exactly 2 characters from 0-9 A-F.`);
-  }
-
-  if (!HASH_ALPHABET_RE.test(hash)) {
-    throw new Error(
-      `[E_BAD_REF] Invalid line reference "${ref}": hash uses invalid characters, hashes use alphabet 0-9 A-F only.`,
-    );
-  }
-
-  const textHint = match[3];
-  return {
-    line,
-    hash,
-    ...(textHint !== undefined ? { textHint } : {}),
-  };
+  return { hash: trimmed };
 }
 
 // ─── Mismatch formatting ────────────────────────────────────────────────
@@ -315,6 +224,7 @@ export function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
     pos: parseAnchorRef(edit.pos),
     ...(edit.end ? { end: parseAnchorRef(edit.end) } : {}),
     lines: hashlineParseText(edit.lines ?? null),
+    ...(edit.current !== undefined ? { current: edit.current } : {}),
   }));
 }
 
@@ -326,6 +236,7 @@ export type HashlineToolEdit = {
   pos: string;
   end?: string;
   lines?: string[] | string | null;
+  current?: string;
 };
 
 function maybeWarnSuspiciousUnicodeEscapePlaceholder(
@@ -343,8 +254,8 @@ function maybeWarnSuspiciousUnicodeEscapePlaceholder(
 
 function describeEdit(edit: HashlineEdit): string {
   return edit.end
-    ? `replace ${edit.pos.line}${ANCHOR_SEP}${edit.pos.hash}-${edit.end.line}${ANCHOR_SEP}${edit.end.hash}`
-    : `replace ${edit.pos.line}${ANCHOR_SEP}${edit.pos.hash}`;
+    ? `replace ${edit.pos.hash}-${edit.end.hash}`
+    : `replace ${edit.pos.hash}`;
 }
 
 export type AnchorValidation =
@@ -356,7 +267,12 @@ export function validateAnchors(
   edits: HashlineEdit[],
 ) : AnchorValidation {
   for (const edit of edits) {
-    if (edit.end && edit.pos.line > edit.end.line) {
+    if (
+      edit.end &&
+      edit.pos.line !== undefined &&
+      edit.end.line !== undefined &&
+      edit.pos.line > edit.end.line
+    ) {
       return {
         ok: false,
         message: `[E_BAD_RANGE] Range start line ${edit.pos.line} must be <= end line ${edit.end.line}`,
@@ -365,6 +281,9 @@ export function validateAnchors(
 
     const refs = edit.end ? [edit.pos, edit.end] : [edit.pos];
     for (const ref of refs) {
+      if (ref.line === undefined) {
+        continue;
+      }
       if (ref.line < 1 || ref.line > file.lines.length) {
         return {
           ok: false,
@@ -404,17 +323,35 @@ export function resolveEditSpans(
   for (const [index, edit] of edits.entries()) {
     const startLine = edit.pos.line;
     const endLine = edit.end?.line ?? edit.pos.line;
+    if (startLine === undefined || endLine === undefined) {
+      return {
+        ok: false,
+        code: "E_UNRESOLVED_ANCHOR",
+        message: "[E_UNRESOLVED_ANCHOR] Anchor hashes must resolve to live lines before applying edits.",
+      };
+    }
     const originalLines = file.lines.slice(startLine - 1, endLine);
+
+    if (edit.current !== undefined && startLine === endLine) {
+      const actual = file.lines[startLine - 1] ?? "";
+      if (actual !== edit.current) {
+        return {
+          ok: false,
+          code: "E_CURRENT_MISMATCH",
+          message: `[E_CURRENT_MISMATCH] Anchor ${edit.pos.hash} current text mismatch. Expected ${JSON.stringify(edit.current)}, found ${JSON.stringify(actual)}.`,
+        };
+      }
+    }
 
     // Append/prepend: insert pure content, no deletion
     if (edit.op === "append") {
       let start: number;
-      if (edit.pos.line < file.lines.length) {
-        start = file.lineStarts[edit.pos.line]!; // right after anchor line's \n
+      if (startLine < file.lines.length) {
+        start = file.lineStarts[startLine]!; // right after anchor line's \n
       } else {
         start = file.content.length;
       }
-      const replacement = edit.pos.line < file.lines.length
+      const replacement = startLine < file.lines.length
         ? edit.lines.join("\n") + "\n"
         : (file.content.endsWith("\n") ? "" : "\n") + edit.lines.join("\n");
       spans.push({
@@ -429,7 +366,7 @@ export function resolveEditSpans(
     }
 
     if (edit.op === "prepend") {
-      const start = file.lineStarts[edit.pos.line - 1]!;
+      const start = file.lineStarts[startLine - 1]!;
       const replacement = edit.lines.join("\n") + "\n";
       spans.push({
         index,
@@ -449,7 +386,7 @@ export function resolveEditSpans(
     ) {
       noopEdits.push({
         editIndex: index,
-        loc: `${edit.pos.line}${ANCHOR_SEP}${edit.pos.hash}`,
+        loc: edit.pos.hash,
         currentContent: originalLines.join("\n"),
       });
       continue;
@@ -566,8 +503,8 @@ export function formatHashlineRegion(
     .slice(startLine - 1, endLine)
     .map((line, index) => {
       const lineNumber = startLine + index;
-      const paddedLineNumber = String(lineNumber).padStart(lineNumberWidth, " ");
-      return `${paddedLineNumber}${ANCHOR_SEP}${computeLineHash(fileLines, startLine - 1 + index)}${CONTENT_SEP}${line}`;
+      const hash = computeLineHash(fileLines, startLine - 1 + index);
+      return `${formatAnchorPrefix({ line: lineNumber, hash, lineNumberWidth })}${line}`;
     })
     .join("\n");
 }

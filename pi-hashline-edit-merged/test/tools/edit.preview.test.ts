@@ -1,14 +1,19 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeAll, describe, expect, it, vi, beforeEach } from "vitest";
 import { chmod } from "fs/promises";
 import { computeEditPreview } from "../../src/edit";
 import { computeLineHash } from "../../src/hashline";
 import { withTempFile } from "../support/fixtures";
+import { ensureHasherReady } from "../../src/hash-format";
 
 vi.mock("../../src/file-kind", () => ({
   loadFileKindAndText: vi.fn(),
 }));
 
 import * as fileKindMod from "../../src/file-kind";
+
+beforeAll(async () => {
+  await ensureHasherReady();
+});
 
 describe("computeEditPreview", () => {
   beforeEach(() => {
@@ -19,11 +24,11 @@ describe("computeEditPreview", () => {
     await withTempFile("sample.txt", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       vi.mocked(fileKindMod.loadFileKindAndText).mockResolvedValue({ kind: "text", text: "aaa\nbbb\nccc\n" });
 
-      const betaRef = `2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}│bbb`;
+      const betaRef = "abc";
       const preview = await computeEditPreview(
         {
           path: "sample.txt",
-          edits: [{ range: [betaRef, betaRef], lines: ["BBB"] }],
+          edits: [{ start: betaRef, end: betaRef, lines: ["BBB"] }],
         },
         cwd,
       );
@@ -33,7 +38,7 @@ describe("computeEditPreview", () => {
         return;
       }
       expect(preview.diff).toContain("Editing 1 block(s)");
-      expect(preview.diff).toContain("→");
+      expect(preview.diff).toContain("replace abc-abc");
     });
   });
 
@@ -43,13 +48,13 @@ describe("computeEditPreview", () => {
       vi.mocked(fileKindMod.loadFileKindAndText).mockResolvedValue({ kind: "text", text: "aaa\nbbb\nccc\n" });
 
       await chmod(path, 0o444);
-      const betaRef = `2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}│bbb`;
+      const betaRef = "abc";
 
       try {
         const preview = await computeEditPreview(
           {
             path: "sample.txt",
-            edits: [{ range: [betaRef, betaRef], lines: ["BBB"] }],
+            edits: [{ start: betaRef, end: betaRef, lines: ["BBB"] }],
           },
           cwd,
         );
@@ -69,11 +74,11 @@ describe("computeEditPreview", () => {
     await withTempFile("sample.txt", "ignored\n", async ({ cwd }) => {
       vi.mocked(fileKindMod.loadFileKindAndText).mockResolvedValue({ kind: "text", text: "aaa\nbbb\nccc\n" });
 
-      const betaRef = `2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}│bbb`;
+      const betaRef = "abc";
       const preview = await computeEditPreview(
         {
           path: "sample.txt",
-          edits: [{ range: [betaRef, betaRef], lines: ["BBB"] }],
+          edits: [{ start: betaRef, end: betaRef, lines: ["BBB"] }],
         },
         cwd,
       );
@@ -97,10 +102,10 @@ describe("computeEditPreview", () => {
         return { kind: "text", text: "aaa\nbbb\nccc\n" };
       });
 
-      const betaRef = `2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}│bbb`;
+      const betaRef = computeLineHash(["aaa", "bbb", "ccc"], 1);
       const editArgs = {
         path: "sample.txt",
-        edits: [{ range: [betaRef, betaRef], lines: ["BBB"] }],
+        edits: [{ start: betaRef, end: betaRef, lines: ["BBB"] }],
       };
 
       // Import registerEditTool to set up the tool with its render methods
@@ -164,7 +169,7 @@ describe("computeEditPreview", () => {
       const preview = await computeEditPreview(
         {
           path: "empty.txt",
-          edits: [{ range: ["1#AB", "1#AB"], lines: ["hello"] }],
+          edits: [{ start: "abc", end: "abc", lines: ["hello"] }],
         },
         cwd,
       );

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { readFile } from "fs/promises";
 import Ajv from "ajv";
 import {
@@ -6,49 +6,53 @@ import {
   hashlineEditToolSchema,
   registerEditTool,
 } from "../../src/edit";
-import { computeLineHash } from "../../src/hashline";
+import registerCore from "../../extensions/core";
+import { ensureHasherReady } from "../../src/hash-format";
 import { makeFakePiRegistry, withTempFile } from "../support/fixtures";
+
+beforeAll(async () => {
+  await ensureHasherReady();
+});
+
+function extractAnchor(text: string, line: string): string {
+  const escaped = line.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = text.match(new RegExp(`^([A-Za-z0-9_\\-]{3})│${escaped}$`, "m"));
+  if (!match) throw new Error(`No anchor for ${line}`);
+  return match[1]!;
+}
 
 describe("assertEditRequest", () => {
   it("accepts valid replace edit", () => {
     expect(() =>
       assertEditRequest({
         path: "a.ts",
-        edits: [{ range: ["1#AB", "1#AB"], lines: ["x"] }],
+        edits: [{ start: "abc", end: "abc", lines: ["x"] }],
       }),
     ).not.toThrow();
   });
-
 });
 
 describe("registerEditTool", () => {
-  it("publishes a schema that validates strict hashline payloads", () => {
+  it("publishes a schema that validates hash-only payloads", () => {
     const ajv = new Ajv({ allErrors: true });
     const validate = ajv.compile(hashlineEditToolSchema as any);
 
     expect(
       validate({
         path: "a.ts",
-        edits: [{ range: ["1#AB", "1#AB"], lines: ["x"] }],
+        edits: [{ start: "abc", end: "abc", lines: ["x"] }],
       }),
     ).toBe(true);
   });
 
-  it("rejects append/prepend in published schema (hidden at runtime)", () => {
+  it("rejects legacy range schema", () => {
     const ajv = new Ajv({ allErrors: true });
     const validate = ajv.compile(hashlineEditToolSchema as any);
 
     expect(
       validate({
         path: "a.ts",
-        edits: [{ after: "1#AB", lines: ["x"] }],
-      }),
-    ).toBe(false);
-
-    expect(
-      validate({
-        path: "a.ts",
-        edits: [{ before: "1#AB", lines: ["x"] }],
+        edits: [{ range: ["1#abc", "1#abc"], lines: ["x"] }],
       }),
     ).toBe(false);
   });
@@ -80,87 +84,97 @@ describe("registerEditTool", () => {
     expect(registered?.prepareArguments).toBeUndefined();
   });
 
-  it("executes strict hashline replace through the normal path", async () => {
-    await withTempFile("sample.txt", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
+  it("edits a single line using hash-only start/end anchors", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
+      registerEditTool(pi);
+      const readTool = getTool("read");
+      const editTool = getTool("edit");
+      const ctx = { cwd, ui: { notify() {} } } as any;
+
+      const readResult = await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
+      const beta = extractAnchor(readResult.content[0].text, "beta");
+
+      const result = await editTool.execute(
+        "e1",
+        { path: "sample.txt", edits: [{ start: beta, end: beta, lines: ["BETA"] }] },
+        undefined,
+        undefined,
+        ctx,
+      );
+
+      expect(result.isError).not.toBe(true);
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
+      expect(result.details?.diff).toContain("│BETA");
+    });
+  });
+
+  it("rejects line-qualified edit anchors", async () => {
+    await withTempFile("sample.txt", "alpha\n", async ({ cwd }) => {
       const { pi, getTool } = makeFakePiRegistry();
       registerEditTool(pi);
       const editTool = getTool("edit");
 
-      const result = await editTool.execute(
-        "e1",
-        {
-          path: "sample.txt",
-          edits: [
-            {
-              range: [`2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}`, `2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}`],
-              lines: ["BBB"],
-            },
-          ],
-        },
-        undefined,
-        undefined,
-        { cwd } as any,
-      );
-
-      expect(await readFile(path, "utf-8")).toBe("aaa\nBBB\nccc\n");
-      expect(result.details?.diff).toContain("+2");
-      expect(result.details?.diff).toContain("│BBB");
+      await expect(
+        editTool.execute(
+          "e1",
+          { path: "sample.txt", edits: [{ start: "1#aB3", end: "1#aB3", lines: ["ALPHA"] }] },
+          undefined,
+          undefined,
+          { cwd } as any,
+        ),
+      ).rejects.toThrow(/E_BAD_REF|line numbers are display-only/);
     });
   });
 
-  it("renders details diff while keeping diff out of LLM-visible text", async () => {
-    await withTempFile("sample.txt", "aaa\nbbb\nccc\n", async ({ cwd }) => {
+  it("validates optional current text when supplied", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
       const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
       registerEditTool(pi);
+      const readTool = getTool("read");
       const editTool = getTool("edit");
-      const editArgs = {
-        path: "sample.txt",
-        edits: [
-          {
-            range: [`2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}│bbb`, `2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}│bbb`],
-            lines: ["BBB"],
-          },
-        ],
-      };
+      const ctx = { cwd, ui: { notify() {} } } as any;
+      const readResult = await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
+      const anchor = extractAnchor(readResult.content[0].text, "beta");
+
+      await expect(
+        editTool.execute(
+          "e1",
+          { path: "sample.txt", edits: [{ start: anchor, end: anchor, current: "not beta", lines: ["BETA"] }] },
+          undefined,
+          undefined,
+          ctx,
+        ),
+      ).rejects.toThrow(/E_CURRENT_MISMATCH/);
+    });
+  });
+
+  it("does not require current for single-line edit", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd, path }) => {
+      const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
+      registerEditTool(pi);
+      const readTool = getTool("read");
+      const editTool = getTool("edit");
+      const ctx = { cwd, ui: { notify() {} } } as any;
+      const readResult = await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
+      const anchor = extractAnchor(readResult.content[0].text, "beta");
 
       const result = await editTool.execute(
         "e1",
-        editArgs,
+        { path: "sample.txt", edits: [{ start: anchor, end: anchor, lines: ["BETA"] }] },
         undefined,
         undefined,
-        { cwd } as any,
+        ctx,
       );
 
-      expect(typeof editTool.renderResult).toBe("function");
-
-      const component = editTool.renderResult(
-        result,
-        { expanded: false, isPartial: false },
-        {
-          bold: (text: string) => text,
-          fg: (token: string, text: string) => `[${token}]${text}[/${token}]`,
-          inverse: (text: string) => `[inverse]${text}[/inverse]`,
-        },
-        {
-          args: editArgs,
-          isError: false,
-          lastComponent: undefined,
-        } as any,
-      ) as { render: (width: number) => string[] };
-
-      const rendered = component.render(200).join("\n");
-
-      expect(rendered).not.toContain("Changes: +1 -1");
-      expect(rendered).not.toContain("Diff preview:");
-      expect(rendered).not.toContain("```diff");
-      const hash = computeLineHash(["aaa", "BBB", "ccc"], 1);
-      expect(rendered).toContain(`[success]+2#${hash}│BBB[/success]`);
-      expect(rendered).not.toContain("Updated sample.txt");
-      expect(rendered).not.toContain("```text");
-      expect(result.details?.diff).toContain("+2");
+      expect(result.isError).not.toBe(true);
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\n");
     });
   });
-});
+
   it("rejects edits on empty files with E_EMPTY_FILE", async () => {
     await withTempFile("empty.txt", "", async ({ cwd }) => {
       const { pi, getTool } = makeFakePiRegistry();
@@ -170,10 +184,7 @@ describe("registerEditTool", () => {
       await expect(
         editTool.execute(
           "e1",
-          {
-            path: "empty.txt",
-            edits: [{ range: ["1#AB", "1#AB"], lines: ["hello"] }],
-          },
+          { path: "empty.txt", edits: [{ start: "abc", end: "abc", lines: ["hello"] }] },
           undefined,
           undefined,
           { cwd } as any,
@@ -181,3 +192,4 @@ describe("registerEditTool", () => {
       ).rejects.toThrow(/\[E_EMPTY_FILE\]/);
     });
   });
+});

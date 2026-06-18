@@ -5,7 +5,6 @@ import { constants } from "fs";
 import { readFileSync } from "fs";
 import {
   type HashlineToolEdit,
-  ANCHOR_SEP,
 } from "./hashline";
 import { resolveToCwd } from "./path-utils";
 import { formatDiffResult } from "./edit-diff-render";
@@ -13,12 +12,12 @@ import { setReadSnapshot } from "./read-snapshot";
 import { resolveEditTarget } from "./edit";
 import { applyMutation } from "./mutation";
 import { isRecord } from "./runtime";
+import { ensureHasherReady } from "./hash-format";
 
 const insertEntrySchema = Type.Object(
   {
     anchor: Type.String({
-      description:
-        `LINE${ANCHOR_SEP}HASH anchor copied from a recent \`read\` output (e.g. "42${ANCHOR_SEP}A4"). The insert target.`,
+      description: "3-character hash anchor copied from read output; no line number or content",
     }),
     direction: Type.String({
       enum: ["after", "before"],
@@ -148,6 +147,7 @@ export async function computeInsertPreview(
   const absolutePath = resolveToCwd(path, cwd);
   const toolEdits = normalizeInsertItems(params.edits);
 
+  await ensureHasherReady();
   const target = await resolveEditTarget(absolutePath, path, constants.R_OK);
   if (!target.ok) {
     return { error: target.error };
@@ -285,6 +285,8 @@ const insertToolDefinition: InsertToolDefinition = {
 
   async execute(_toolCallId, params, signal, _onUpdate, ctx) {
     assertInsertRequest(params);
+
+    await ensureHasherReady();
 
     const path = (params as InsertRequestParams).path;
     const absolutePath = resolveToCwd(path, ctx.cwd);

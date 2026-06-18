@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { hashlineParseText, computeLineHash } from "../../src/hashline";
+import { beforeAll, describe, expect, it } from "vitest";
+import { hashlineParseText, computeLineHash, resolveEditAnchors } from "../../src/hashline";
+import { ensureHasherReady } from "../../src/hash-format";
+
+beforeAll(async () => {
+  await ensureHasherReady();
+});
 
 describe("hashlineParseText", () => {
   it("returns [] for null", () => {
@@ -35,24 +40,38 @@ describe("hashlineParseText", () => {
     expect(hashlineParseText("")).toEqual([""]);
   });
 
-  it("rejects array input that contains LINE#HASH: prefixes", () => {
-    expect(() => hashlineParseText(["1#D8│foo", "2#3F│bar"])).toThrow(/^\[E_INVALID_PATCH\]/);
+  it("rejects array input that contains HASH display prefixes", () => {
+    expect(() => hashlineParseText(["aB3│foo", "xY7│bar"])).toThrow(/^\[E_INVALID_PATCH\]/);
   });
 
-  it("rejects diff-preview hunks with + and context hash prefixes", () => {
+  it("rejects diff-preview hunks with + and hash prefixes", () => {
     expect(() =>
-      hashlineParseText([" 9#3F│keep", "+10#B2│new", " 11#C7│after"]),
+      hashlineParseText(["aB3│keep", "+xY7│new", "qR2│after"]),
     ).toThrow(/^\[E_INVALID_PATCH\]/);
   });
 
   it("rejects diff-preview deletion rows", () => {
     expect(() =>
-      hashlineParseText([" 9#3F│keep", "-10    old", " 11#C7│after"]),
+      hashlineParseText(["aB3│keep", "-10    old", "qR2│after"]),
     ).toThrow(/^\[E_INVALID_PATCH\]/);
   });
 
   it("rejects string-form rendered diff hunks", () => {
-    const input = " 9#3F│keep\n-10    old\n+10#B2│new\n 11#C7│after";
+    const input = "aB3│keep\n-10    old\n+xY7│new\nqR2│after";
     expect(() => hashlineParseText(input)).toThrow(/^\[E_INVALID_PATCH\]/);
+  });
+});
+
+describe("hash-only anchor parsing", () => {
+  it("rejects line-qualified anchors in mutating requests", () => {
+    expect(() => resolveEditAnchors([
+      { op: "replace", pos: "1#abc", end: "1#abc", lines: ["x"] },
+    ])).toThrow(/E_BAD_REF|hash alone|no line numbers|line numbers are display-only/);
+  });
+
+  it("rejects copied display lines", () => {
+    expect(() => resolveEditAnchors([
+      { op: "replace", pos: "aB3│content", lines: ["x"] },
+    ])).toThrow(/Copy only the 3-character hash before/);
   });
 });

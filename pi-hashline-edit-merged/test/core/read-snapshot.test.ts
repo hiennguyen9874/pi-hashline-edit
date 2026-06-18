@@ -1,10 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   setReadSnapshot,
   getReadSnapshot,
   _setReadSnapshotState,
 } from "../../src/read-snapshot";
 import { buildHashlineFile } from "../../src/hashline";
+import { ensureHasherReady } from "../../src/hash-format";
+
+beforeAll(async () => {
+  await ensureHasherReady();
+});
 
 describe("read-snapshot", () => {
   it("stores and retrieves a snapshot", () => {
@@ -12,6 +17,8 @@ describe("read-snapshot", () => {
     const snap = getReadSnapshot("foo.ts");
     expect(snap).toBeDefined();
     expect(snap!.file.content).toBe("hello\n");
+    expect(snap!.file.lineHashes.every((hash) => /^[A-Za-z0-9_\-]{3}$/.test(hash))).toBe(true);
+    expect(new Set(snap!.file.lineHashes).size).toBe(snap!.file.lineHashes.length);
   });
 
   it("returns undefined for a different path", () => {

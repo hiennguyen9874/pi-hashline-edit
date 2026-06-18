@@ -1,7 +1,23 @@
-import { describe, expect, it } from "vitest";
-import { buildHashlineFile, validateAnchors, resolveEditSpans, applySpans, formatMismatchError, computeLineHash, computeHashFromContext, normalizeLine, hashlineParseText } from "../../src/hashline";
+import { beforeAll, describe, expect, it } from "vitest";
+import {
+  applySpans,
+  buildHashlineFile,
+  computeHashFromContext,
+  computeLineHash,
+  formatHashlineRegion,
+  formatMismatchError,
+  hashlineParseText,
+  normalizeLine,
+  resolveEditSpans,
+  validateAnchors,
+  type HashlineEdit,
+} from "../../src/hashline";
 import { partitionExact } from "../../src/fuzzy-match";
-import type { HashlineEdit } from "../../src/hashline";
+import { ensureHasherReady } from "../../src/hash-format";
+
+beforeAll(async () => {
+  await ensureHasherReady();
+});
 
 function applyHashlineEdits(content: string, edits: HashlineEdit[], signal?: AbortSignal) {
   if (signal?.aborted) throw new Error("AbortError");
@@ -10,17 +26,18 @@ function applyHashlineEdits(content: string, edits: HashlineEdit[], signal?: Abo
   if (!struct.ok) throw new Error(struct.message);
   const exact = partitionExact(edits, file);
   if (exact.unmatched.length > 0) {
-    const mismatches = exact.unmatched.flatMap((e) => {
-      const refs = e.end ? [e.pos, e.end] : [e.pos];
-      return refs.map((r) => ({
-        line: r.line,
-        expected: r.hash,
-        actual: file.lineHashes[r.line - 1] ?? "OOB",
+    const mismatches = exact.unmatched.flatMap((edit) => {
+      const refs = edit.end ? [edit.pos, edit.end] : [edit.pos];
+      return refs.map((ref) => ({
+        line: ref.line ?? 1,
+        expected: ref.hash,
+        actual: ref.line ? file.lineHashes[ref.line - 1] ?? "OOB" : "OOB",
       }));
     });
     const retryLines = new Set(mismatches.map((m) => m.line));
     throw new Error(formatMismatchError(mismatches, file.lines, retryLines));
   }
+  const spanResult = resolveEditSpans(file, exact.matched);
   if (!spanResult.ok) throw new Error(spanResult.message);
   const applied = applySpans(file, spanResult.spans);
   return {
@@ -33,10 +50,10 @@ function applyHashlineEdits(content: string, edits: HashlineEdit[], signal?: Abo
 }
 
 describe("computeLineHash", () => {
-  it("returns a 2-character hex string", () => {
+  it("returns a 3-character base64url string", () => {
     const hash = computeLineHash(["hello"], 0);
-    expect(hash).toHaveLength(2);
-    expect(hash).toMatch(/^[0-9A-F]{2}$/);
+    expect(hash).toHaveLength(3);
+    expect(hash).toMatch(/^[A-Za-z0-9_\-]{3}$/);
   });
 
   it("trims trailing whitespace without collapsing internal spaces", () => {
@@ -48,14 +65,27 @@ describe("computeLineHash", () => {
     expect(computeLineHash(["hello\r"], 0)).toBe(computeLineHash(["hello"], 0));
   });
 
-  it("produces same hash for same content with same neighbors", () => {
+  it("produces same hash for same content", () => {
     const h1 = computeLineHash(["prev", "}", "next"], 1);
-    const h2 = computeLineHash(["prev", "}", "next"], 1);
+    const h2 = computeLineHash(["other", "}", "lines"], 1);
     expect(h1).toBe(h2);
   });
 });
 
-describe("strict hashline contract", () => {
+describe("hash-only hashline contract", () => {
+  it("builds one unique 3-character hash per visible line", () => {
+    const file = buildHashlineFile("}\n}\nconst x = 1;\n}");
+    expect(file.lineHashes).toHaveLength(4);
+    expect(new Set(file.lineHashes).size).toBe(4);
+    expect(file.lineHashes.every((hash) => /^[A-Za-z0-9_\-]{3}$/.test(hash))).toBe(true);
+  });
+
+  it("formats hash-only anchors by default", () => {
+    const text = formatHashlineRegion(["alpha", "beta"], 1, 2);
+    expect(text).toMatch(/^[A-Za-z0-9_\-]{3}│alpha\n[A-Za-z0-9_\-]{3}│beta$/);
+    expect(text).not.toMatch(/^\s*1#/);
+  });
+
   it("preserves internal spaces when hashing", () => {
     expect(computeLineHash(["a b"], 0)).not.toBe(computeLineHash(["ab"], 0));
   });
@@ -68,34 +98,26 @@ describe("strict hashline contract", () => {
     expect(hashlineParseText(["alpha", ""])).toEqual(["alpha", ""]);
   });
 
-  it("rejects stale anchors instead of relocating by hash", () => {
+  it("rejects absent hash anchors instead of guessing", () => {
     const fileLines = ["a", "INSERTED", "b", "target", "c"];
     const content = fileLines.join("\n");
-    const stale = {
+    const stale: HashlineEdit = {
       op: "replace",
-      pos: { line: 3, hash: computeLineHash(fileLines, 3) },
+      pos: { hash: "abc" },
       lines: ["updated"],
     };
 
-    expect(() => applyHashlineEdits(content, [stale as any])).toThrow(
-      /1 stale anchor: 3#[0-9A-F]+\./,
-    );
+    expect(() => applyHashlineEdits(content, [stale])).toThrow(/stale anchor|E_STALE_ANCHOR/);
   });
 
-  it("computeHashFromContext matches computeLineHash", () => {
+  it("computeHashFromContext matches current-line computeLineHash", () => {
     const lines = ["  hello  ", "world", "  foo"];
-
-    // computeLineHash normalizes internally
     const fromFile = computeLineHash(lines, 1);
-
-    // computeHashFromContext takes pre-normalized strings
     const fromContext = computeHashFromContext(
       normalizeLine(lines[0]!),
       normalizeLine(lines[1]!),
       normalizeLine(lines[2]!),
     );
-
     expect(fromContext).toBe(fromFile);
   });
-
 });

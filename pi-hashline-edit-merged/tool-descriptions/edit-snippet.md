@@ -1,1 +1,1 @@
-Replace content in a text file via LINE#HASH anchors from read
+Replace content in a text file via 3-character hash anchors from read. Copy only the 3-character hash before │. Do not include line numbers, #, │, or content.

@@ -1,28 +1,32 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { readFile } from "fs/promises";
 import Ajv from "ajv";
 import {
   assertInsertRequest,
   insertToolSchema,
 } from "../../src/insert";
-import { computeLineHash } from "../../src/hashline";
 import registerCore from "../../extensions/core";
 import registerInsert from "../../extensions/insert";
 import { makeFakePiRegistry, withTempFile } from "../support/fixtures";
+import { ensureHasherReady } from "../../src/hash-format";
+
+beforeAll(async () => {
+  await ensureHasherReady();
+});
 
 describe("assertInsertRequest", () => {
   it("accepts valid insert", () => {
     expect(() =>
       assertInsertRequest({
         path: "a.ts",
-        edits: [{ anchor: "1#AB", direction: "after", lines: ["x"] }],
+        edits: [{ anchor: "abc", direction: "after", lines: ["x"] }],
       }),
     ).not.toThrow();
   });
 
   it("rejects missing path", () => {
     expect(() =>
-      assertInsertRequest({ edits: [{ anchor: "1#AB", direction: "after", lines: ["x"] }] }),
+      assertInsertRequest({ edits: [{ anchor: "abc", direction: "after", lines: ["x"] }] }),
     ).toThrow();
   });
 
@@ -40,7 +44,7 @@ describe("insertToolSchema", () => {
     expect(
       validate({
         path: "a.ts",
-        edits: [{ anchor: "1#AB", direction: "after", lines: ["x"] }],
+        edits: [{ anchor: "abc", direction: "after", lines: ["x"] }],
       }),
     ).toBe(true);
   });
@@ -62,7 +66,7 @@ describe("insertToolSchema", () => {
     expect(
       validate({
         path: "a.ts",
-        edits: [{ anchor: "1#AB", direction: "above", lines: ["x"] }],
+        edits: [{ anchor: "abc", direction: "above", lines: ["x"] }],
       }),
     ).toBe(false);
   });
@@ -158,7 +162,7 @@ describe("insert tool execution", () => {
       await expect(
         insertTool.execute(
           "i1",
-          { path: "empty.txt", edits: [{ anchor: "1#AB", direction: "after", lines: ["hello"] }] },
+          { path: "empty.txt", edits: [{ anchor: "abc", direction: "after", lines: ["hello"] }] },
           undefined, undefined, ctx,
         ),
       ).rejects.toThrow(/E_EMPTY_FILE/);

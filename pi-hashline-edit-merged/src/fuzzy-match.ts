@@ -1,19 +1,8 @@
-/**
- * Hash-based anchor relocation.
- *
- * When anchors are stale against the live file, search ±OFFSET lines for
- * the anchor's hash. Both endpoints shift by the same offset. Only accepts
- * a single unique match; rejects on zero or multiple matches.
- *
- * No content comparison — purely hash-based.
- */
 import {
+  type Anchor,
   type HashlineFile,
   type HashlineEdit,
 } from "./hashline";
-
-const OFFSET_SINGLE = 1;
-const OFFSET_MULTI = 2;
 
 /**
  * Result shape shared by all matchers (exact, fuzzy, snapshot).
@@ -24,9 +13,36 @@ export interface MatchResult {
   warnings: string[];
 }
 
+function resolveUniqueHash(file: HashlineFile, hash: string): number | null {
+  const matches: number[] = [];
+  file.lineHashes.forEach((lineHash, index) => {
+    if (lineHash === hash) matches.push(index + 1);
+  });
+  return matches.length === 1 ? matches[0]! : null;
+}
+
+function resolveAnchor(file: HashlineFile, anchor: Anchor): Anchor | null {
+  const line = resolveUniqueHash(file, anchor.hash);
+  return line === null ? null : { ...anchor, line };
+}
+
+function resolveEdit(file: HashlineFile, edit: HashlineEdit): HashlineEdit | null {
+  const pos = resolveAnchor(file, edit.pos);
+  if (!pos) return null;
+  const end = edit.end ? resolveAnchor(file, edit.end) : undefined;
+  if (edit.end && !end) return null;
+  if (end && pos.line! > end.line!) return null;
+  return {
+    ...edit,
+    pos,
+    ...(end ? { end } : {}),
+  };
+}
+
 /**
- * Partition edits by hash validity against a file. Edits whose anchor hashes
- * match the file go into `matched`; the rest go into `unmatched`.
+ * Partition edits by unique hash validity against a file. Edits whose anchor
+ * hashes resolve exactly once go into `matched`; absent or ambiguous hashes go
+ * into `unmatched`.
  */
 export function partitionExact(
   edits: HashlineEdit[],
@@ -36,20 +52,9 @@ export function partitionExact(
   const unmatched: HashlineEdit[] = [];
 
   for (const edit of edits) {
-    const refs = edit.end ? [edit.pos, edit.end] : [edit.pos];
-    let ok = true;
-    for (const ref of refs) {
-      if (ref.line < 1 || ref.line > file.lines.length) {
-        ok = false;
-        break;
-      }
-      if (file.lineHashes[ref.line - 1] !== ref.hash) {
-        ok = false;
-        break;
-      }
-    }
-    if (ok) {
-      matched.push(edit);
+    const resolved = resolveEdit(file, edit);
+    if (resolved) {
+      matched.push(resolved);
     } else {
       unmatched.push(edit);
     }
@@ -59,11 +64,9 @@ export function partitionExact(
 }
 
 /**
- * Relocate stale edits by searching ±maxOffset lines in the live file for
- * the anchor's hash. Both endpoints shift by the same offset. Only accepts
- * a single unique match; rejects on zero or multiple matches.
- *
- * The anchor hash stays unchanged — we found it at the new position.
+ * Hash-only anchors no longer carry trusted line positions. Relocation is the
+ * same unique-hash live resolution, with a warning only when a legacy/internal
+ * line value was present and changed.
  */
 export function fuzzyMatch(
   edits: HashlineEdit[],
@@ -71,72 +74,29 @@ export function fuzzyMatch(
 ): MatchResult {
   const matched: HashlineEdit[] = [];
   const unmatched: HashlineEdit[] = [];
-  const warnings: string[] = [];
   let relocationCount = 0;
 
   for (const edit of edits) {
-    const startLine = edit.pos.line;
-    const endLine = edit.end?.line ?? startLine;
-
-    const isSingle = edit.end === undefined || edit.end.line === edit.pos.line;
-    const maxOffset = isSingle ? OFFSET_SINGLE : OFFSET_MULTI;
-
-    // Search current file for the hash within ±maxOffset
-    let bestOffset: number | null = null;
-
-    for (let offset = -maxOffset; offset <= maxOffset; offset++) {
-      const newStart = startLine + offset;
-      const newEnd = endLine + offset;
-
-      if (newStart < 1 || newEnd > currentFile.lines.length) continue;
-
-      // Must match pos.hash at the new position
-      if (currentFile.lineHashes[newStart - 1] !== edit.pos.hash) continue;
-
-      // For range edits, end.hash must also match at the new position
-      if (edit.end && currentFile.lineHashes[newEnd - 1] !== edit.end.hash) continue;
-
-      if (bestOffset !== null) {
-        // Multiple matches — reject
-        bestOffset = null;
-        break;
-      }
-      bestOffset = offset;
-    }
-
-    if (bestOffset === null) {
+    const resolved = resolveEdit(currentFile, edit);
+    if (!resolved) {
       unmatched.push(edit);
       continue;
     }
 
-    // Relocate: shift both anchors by the offset, hash stays the same
-    const newStart = startLine + bestOffset;
-    const newEnd = endLine + bestOffset;
-
-    const relocated: HashlineEdit = {
-      op: edit.op,
-      pos: {
-        line: newStart,
-        hash: edit.pos.hash,
-      },
-      end: edit.end
-        ? {
-            line: newEnd,
-            hash: edit.end.hash,
-          }
-        : undefined,
-      lines: edit.lines,
-    };
-
-    matched.push(relocated);
-    relocationCount++;
+    if (
+      (edit.pos.line !== undefined && edit.pos.line !== resolved.pos.line) ||
+      (edit.end?.line !== undefined && resolved.end && edit.end.line !== resolved.end.line)
+    ) {
+      relocationCount++;
+    }
+    matched.push(resolved);
   }
 
-  if (relocationCount > 0) {
-    warnings.push(
-      `[RELOCATED] ${relocationCount} range(s) relocated via hash matching. Please review the diff carefully.`,
-    );
-  }
-
-  return { matched, unmatched, warnings };
+  return {
+    matched,
+    unmatched,
+    warnings: relocationCount > 0
+      ? [`[RELOCATED] ${relocationCount} range(s) relocated via hash matching. Please review the diff carefully.`]
+      : [],
+  };
 }

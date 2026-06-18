@@ -22,6 +22,7 @@ import { partitionExact, fuzzyMatch } from "./fuzzy-match";
 import { getReadSnapshot } from "./read-snapshot";
 import { threeWayMerge } from "./merge";
 import { resolveEditTarget, emitUndoSnapshot } from "./edit";
+import { ensureHasherReady } from "./hash-format";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
     }
     const { bom, normalized: originalNormalized, ending: originalEnding } = target;
 
+    await ensureHasherReady();
     const resolved = resolveEditAnchors(toolEdits);
 
     let result: string;
@@ -157,11 +159,12 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
       const mismatches = remaining.flatMap((e) => {
         const refs = e.end ? [e.pos, e.end] : [e.pos];
         return refs.map((r) => {
-          retryLines.add(r.line);
+          const line = r.line ?? 1;
+          retryLines.add(line);
           return {
-            line: r.line,
+            line,
             expected: r.hash,
-            actual: currentFile.lineHashes[r.line - 1] ?? "OOB",
+            actual: r.line ? currentFile.lineHashes[r.line - 1] ?? "OOB" : "OOB",
           };
         });
       });

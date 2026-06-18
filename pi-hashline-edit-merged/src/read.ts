@@ -14,6 +14,7 @@ import { constants } from "fs";
 import { normalizeToLF, stripBom } from "./edit-diff";
 import { loadFileKindAndText } from "./file-kind";
 import { buildHashlineFile, formatHashlineRegion } from "./hashline";
+import { ensureHasherReady } from "./hash-format";
 import { resolveToCwd } from "./path-utils";
 import { throwIfAborted } from "./runtime";
 import { getFileSnapshot } from "./snapshot";
@@ -205,6 +206,7 @@ export function registerReadTool(pi: ExtensionAPI): void {
       throwIfAborted(signal);
       const normalized = normalizeToLF(stripBom(file.text).text);
       if (!params.raw) {
+        await ensureHasherReady();
         const hf = buildHashlineFile(normalized);
         setReadSnapshot(absolutePath, hf);
         if (pi.events) {

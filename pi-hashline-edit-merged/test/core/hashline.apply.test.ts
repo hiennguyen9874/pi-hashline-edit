@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { buildHashlineFile, validateAnchors, resolveEditSpans, applySpans, formatMismatchError, computeLineHash, type HashlineEdit } from "../../src/hashline";
+import { beforeAll, describe, expect, it } from "vitest";
+import { buildHashlineFile, validateAnchors, resolveEditSpans, applySpans, formatMismatchError, type HashlineEdit } from "../../src/hashline";
 import { partitionExact } from "../../src/fuzzy-match";
+import { ensureHasherReady } from "../../src/hash-format";
+
+beforeAll(async () => {
+  await ensureHasherReady();
+});
 
 function applyHashlineEdits(content: string, edits: HashlineEdit[], signal?: AbortSignal) {
   if (signal?.aborted) throw new Error("AbortError");
@@ -12,15 +17,15 @@ function applyHashlineEdits(content: string, edits: HashlineEdit[], signal?: Abo
     const mismatches = exact.unmatched.flatMap((e) => {
       const refs = e.end ? [e.pos, e.end] : [e.pos];
       return refs.map((r) => ({
-        line: r.line,
+        line: r.line ?? 1,
         expected: r.hash,
-        actual: file.lineHashes[r.line - 1] ?? "OOB",
+        actual: r.line ? file.lineHashes[r.line - 1] ?? "OOB" : "OOB",
       }));
     });
     const retryLines = new Set(mismatches.map((m) => m.line));
     throw new Error(formatMismatchError(mismatches, file.lines, retryLines));
   }
-  const spanResult = resolveEditSpans(file, edits);
+  const spanResult = resolveEditSpans(file, exact.matched);
   if (!spanResult.ok) throw new Error(spanResult.message);
   const applied = applySpans(file, spanResult.spans);
   return {
@@ -33,8 +38,8 @@ function applyHashlineEdits(content: string, edits: HashlineEdit[], signal?: Abo
 }
 
 function makeTag(content: string, line: number) {
-  const fileLines = content.split("\n");
-  return { line, hash: computeLineHash(fileLines, line - 1) };
+  const file = buildHashlineFile(content);
+  return { hash: file.lineHashes[line - 1]! };
 }
 
 describe("applyHashlineEdits — basic operations", () => {

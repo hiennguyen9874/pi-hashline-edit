@@ -11,26 +11,28 @@ import {
 } from "./edit-diff";
 import {
   type HashlineToolEdit,
-  ANCHOR_SEP,
-  CONTENT_SEP,
 } from "./hashline";
 import { loadFileKindAndText } from "./file-kind";
 import { resolveToCwd } from "./path-utils";
 import { formatDiffResult } from "./edit-diff-render";
 import { applyMutation } from "./mutation";
 import { isRecord } from "./runtime";
+import { ensureHasherReady } from "./hash-format";
 
 const editEntrySchema = Type.Object(
   {
-    range: Type.Array(Type.String(), {
-      minItems: 2,
-      maxItems: 2,
-      description:
-        `LINE${ANCHOR_SEP}HASH anchor pair [start, end] copied from a recent \`read\` or diff output. Use the same anchor twice for single-line: ["42${ANCHOR_SEP}A4", "42${ANCHOR_SEP}A4"].`,
+    start: Type.String({
+      description: "3-character hash anchor copied from read output; no line number or content",
+    }),
+    end: Type.String({
+      description: "3-character hash anchor copied from read output; use same hash for single-line edits",
     }),
     lines: Type.Array(Type.String(), {
       description: "New content lines. Use [] to delete.",
     }),
+    current: Type.Optional(Type.String({
+      description: "Optional exact current line text for single-line replacements.",
+    })),
   },
   { additionalProperties: false },
 );
@@ -38,7 +40,7 @@ export const hashlineEditToolSchema = Type.Object(
   {
     path: Type.String({ description: "path" }),
     edits: Type.Array(editEntrySchema, {
-      description: `Edits to apply to $path. Each edit replaces the range [start, end] with lines. Use the same anchor twice for single-line; use [] to delete.`,
+      description: "Edits to apply to $path. Copy only the 3-character hash before │. Do not include line numbers, #, │, or content.",
     }),
   },
   { additionalProperties: false },
@@ -96,10 +98,13 @@ export function assertEditRequest(request: unknown): asserts request is EditRequ
 }
 
 export function normalizeEditItems(edits: Record<string, unknown>[]): HashlineToolEdit[] {
-  return edits.map((edit) => {
-    const [pos, end] = (edit.range as [string, string]) || ["", ""];
-    return { op: "replace", pos, end, lines: (edit.lines as string[]) || [] };
-  });
+  return edits.map((edit) => ({
+    op: "replace",
+    pos: edit.start as string,
+    end: edit.end as string,
+    lines: (edit.lines as string[]) || [],
+    ...(typeof edit.current === "string" ? { current: edit.current } : {}),
+  }));
 }
 
 export type EditTargetResult =
@@ -296,6 +301,7 @@ export async function computeEditPreview(
   const absolutePath = resolveToCwd(path, cwd);
   const toolEdits = normalizeEditItems(params.edits);
 
+  await ensureHasherReady();
   const target = await resolveEditTarget(absolutePath, path, constants.R_OK);
   if (!target.ok) {
     return { error: target.error };
@@ -304,7 +310,7 @@ export async function computeEditPreview(
   const lines: string[] = [];
   for (const edit of toolEdits) {
     const end = edit.end ?? edit.pos;
-    lines.push(`  ${edit.pos} → ${end}`);
+    lines.push(`  replace ${edit.pos}-${end}`);
   }
 
   return { diff: `Editing ${toolEdits.length} block(s):\n${lines.join("\n")}` };
@@ -439,6 +445,8 @@ const editToolDefinition: EditToolDefinition = {
 
   async execute(_toolCallId, params, signal, _onUpdate, ctx) {
     assertEditRequest(params);
+
+    await ensureHasherReady();
 
     const path = (params as EditRequestParams).path;
     const absolutePath = resolveToCwd(path, ctx.cwd);
