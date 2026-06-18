@@ -89,18 +89,45 @@ const EDIT_PROMPT_SNIPPET = readFileSync(
 
 
 // Safety net for environments where AJV validation is disabled.
-// Field-type and schema validation are AJV's responsibility;
-// only prevent crashes from missing required top-level fields.
 // Path existence is checked in execute() once CWD is available.
 export function assertEditRequest(request: unknown): asserts request is EditRequestParams {
   if (!isRecord(request)) {
     throw new Error("Edit request must be an object.");
+  }
+  const rootKeys = new Set(["path", "edits"]);
+  for (const key of Object.keys(request)) {
+    if (!rootKeys.has(key)) {
+      throw new Error(`Edit request contains unknown field "${key}".`);
+    }
   }
   if (typeof request.path !== "string" || request.path.length === 0) {
     throw new Error('Edit request requires a non-empty "path" string.');
   }
   if (!Array.isArray(request.edits) || request.edits.length === 0) {
     throw new Error('Edit request requires a non-empty "edits" array.');
+  }
+  const editKeys = new Set(["start", "end", "lines", "current"]);
+  for (const [index, edit] of request.edits.entries()) {
+    if (!isRecord(edit)) {
+      throw new Error(`Edit ${index + 1} must be an object.`);
+    }
+    for (const key of Object.keys(edit)) {
+      if (!editKeys.has(key)) {
+        throw new Error(`Edit ${index + 1} contains unknown field "${key}".`);
+      }
+    }
+    if (typeof edit.start !== "string" || edit.start.length === 0) {
+      throw new Error(`Edit ${index + 1} requires a non-empty "start" string.`);
+    }
+    if (typeof edit.end !== "string" || edit.end.length === 0) {
+      throw new Error(`Edit ${index + 1} requires a non-empty "end" string.`);
+    }
+    if (!Array.isArray(edit.lines) || !edit.lines.every((line) => typeof line === "string")) {
+      throw new Error(`Edit ${index + 1} requires "lines" to be an array of strings.`);
+    }
+    if (edit.current !== undefined && typeof edit.current !== "string") {
+      throw new Error(`Edit ${index + 1} field "current" must be a string.`);
+    }
   }
 }
 

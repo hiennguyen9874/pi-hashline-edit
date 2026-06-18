@@ -29,26 +29,28 @@ describe("snapshotId surface (details-only after W2)", () => {
     });
   });
 
-  it("edit silently ignores unknown root fields (AJV responsibility)", async () => {
+  it("edit rejects unknown root fields when runtime validation is used", async () => {
     await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd, path }) => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
       const bRef = computeLineHash(["alpha", "beta"], 1);
 
-      await editTool.execute(
-        "e1",
-        {
-          path: "sample.txt",
-          snapshotId: "v1|fake|0|0",
-          edits: [{ start: bRef, end: bRef, lines: ["BETA"] }],
-        },
-        undefined,
-        undefined,
-        { cwd, hasUI: true, ui: { notify() {} } } as any,
-      );
+      await expect(
+        editTool.execute(
+          "e1",
+          {
+            path: "sample.txt",
+            snapshotId: "v1|fake|0|0",
+            edits: [{ start: bRef, end: bRef, lines: ["BETA"] }],
+          },
+          undefined,
+          undefined,
+          { cwd, hasUI: true, ui: { notify() {} } } as any,
+        ),
+      ).rejects.toThrow('Edit request contains unknown field "snapshotId".');
 
-      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\n");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nbeta\n");
     });
   });
 
@@ -81,8 +83,8 @@ describe("snapshotId surface (details-only after W2)", () => {
           { cwd, hasUI: true, ui: { notify() {} } } as any,
         );
 
-        expect(getText(result)).toContain(" 2#"); // diff shows context line 2
-        expect(getText(result)).toContain("+4#"); // diff shows added line 4
+        expect(result.details?.diff).toContain(" 2#"); // diff shows context line 2
+        expect(result.details?.diff).toContain("+4#"); // diff shows added line 4
         expect(await readFile(path, "utf-8")).toBe(
           "one\nTWO!\nthree\nFOUR\nfive\n",
         );

@@ -197,6 +197,7 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
       let linesTruncated = false;
       let aborted = false;
       let killedDueToLimit = false;
+      let globalMatchCount = 0;
 
       const cleanup = () => { rl.close(); signal?.removeEventListener("abort", onAbort); };
       const stopChild = (dueToLimit = false) => { if (!child.killed) { killedDueToLimit = dueToLimit; child.kill(); } };
@@ -225,6 +226,13 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
           if (!entries) return;
 
           const existing = entries.find(e => e.lineNumber === num);
+          const isNewMatch = event.type === "match" && !(existing?.isMatch ?? false);
+          if (isNewMatch && globalMatchCount >= effectiveLimit) {
+            matchLimitReached = true;
+            stopChild(true);
+            return;
+          }
+
           const isMatch = event.type === "match" || (existing?.isMatch ?? false);
           if (existing) {
             existing.isMatch = isMatch;
@@ -232,9 +240,9 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
             entries.push({ lineNumber: num, isMatch });
           }
 
-          if (event.type === "match") {
-            const matchCount = entries.filter(e => e.isMatch).length;
-            if (matchCount >= effectiveLimit) {
+          if (isNewMatch) {
+            globalMatchCount += 1;
+            if (globalMatchCount >= effectiveLimit) {
               matchLimitReached = true;
               stopChild(true);
             }

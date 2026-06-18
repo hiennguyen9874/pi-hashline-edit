@@ -1,8 +1,8 @@
 /**
  * Edit response builders.
  *
- * Unified diff output: agent and user see the same content. The diff is
- * generated from structuredPatch hunks with hashline-formatted lines.
+ * Model-visible output stays compact; full unified diffs are exposed in
+ * host-only details for UI rendering.
  */
 
 import { generateDiffString } from "./edit-diff";
@@ -132,7 +132,7 @@ export function buildChangedResponse(input: SuccessResponseInput): ToolResult {
   const removedLines = countDiffLines(diffResult.diff, "-");
   const warningsBlock = warningsBlockOf(warnings);
 
-  const text = [warningsBlock.trimStart(), diffResult.diff]
+  const text = [`Applied changes to ${input.path}\nClassification: applied`, warningsBlock.trimStart()]
     .filter((section) => section.length > 0)
     .join("\n\n");
 

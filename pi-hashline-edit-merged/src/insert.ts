@@ -30,6 +30,7 @@ const insertEntrySchema = Type.Object(
       description: 'Insert direction: "after" or "before" the anchor line.',
     }),
     lines: Type.Array(Type.String(), {
+      minItems: 1,
       description: "Lines to insert.",
     }),
   },
@@ -83,20 +84,46 @@ export function assertInsertRequest(request: unknown): asserts request is Insert
   if (!isRecord(request)) {
     throw new Error("Insert request must be an object.");
   }
+  const rootKeys = new Set(["path", "edits"]);
+  for (const key of Object.keys(request)) {
+    if (!rootKeys.has(key)) {
+      throw new Error(`Insert request contains unknown field "${key}".`);
+    }
+  }
   if (typeof request.path !== "string" || request.path.length === 0) {
     throw new Error('Insert request requires a non-empty "path" string.');
   }
   if (!Array.isArray(request.edits) || request.edits.length === 0) {
     throw new Error('Insert request requires a non-empty "edits" array.');
   }
+  const editKeys = new Set(["anchor", "direction", "lines"]);
+  for (const [index, edit] of request.edits.entries()) {
+    if (!isRecord(edit)) {
+      throw new Error(`Insert ${index + 1} must be an object.`);
+    }
+    for (const key of Object.keys(edit)) {
+      if (!editKeys.has(key)) {
+        throw new Error(`Insert ${index + 1} contains unknown field "${key}".`);
+      }
+    }
+    if (typeof edit.anchor !== "string" || edit.anchor.length === 0) {
+      throw new Error(`Insert ${index + 1} requires a non-empty "anchor" string.`);
+    }
+    if (edit.direction !== "before" && edit.direction !== "after") {
+      throw new Error(`Insert ${index + 1} requires "direction" to be "before" or "after".`);
+    }
+    if (!Array.isArray(edit.lines) || edit.lines.length === 0 || !edit.lines.every((line) => typeof line === "string")) {
+      throw new Error(`Insert ${index + 1} requires non-empty "lines" array of strings.`);
+    }
+  }
 }
 
 function normalizeInsertItems(edits: Record<string, unknown>[]): HashlineToolEdit[] {
   return edits.map((edit) => {
-    const anchor = (edit.anchor as string) || "";
-    const direction = (edit.direction as string) || "after";
+    const anchor = edit.anchor as string;
+    const direction = edit.direction as string;
     const op = direction === "before" ? "prepend" as const : "append" as const;
-    return { op, pos: anchor, lines: (edit.lines as string[]) || [] };
+    return { op, pos: anchor, lines: edit.lines as string[] };
   });
 }
 

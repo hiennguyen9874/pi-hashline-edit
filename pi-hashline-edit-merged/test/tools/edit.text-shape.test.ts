@@ -9,7 +9,7 @@ function getText(result: { content: Array<{ text?: string }> }): string {
 }
 
 describe("edit tool text shape (token budget)", () => {
-  it("returns unified diff in LLM-visible text with line counts in details", async () => {
+  it("returns compact LLM-visible text with diff and line counts in details", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
@@ -33,13 +33,11 @@ describe("edit tool text shape (token budget)", () => {
       );
 
       const text = getText(result);
-      expect(text).toContain(" 1#");
-      expect(text).toContain("+2#");
-      expect(text).toContain("│BBB");
-      expect(text).not.toContain("Updated sample.ts");
-      expect(text).not.toContain("Changes: +1 -1");
-      expect(text).not.toContain("Diff preview");
-      expect(text).not.toContain("Updated anchors");
+      expect(text).toContain("Applied changes to sample.ts");
+      expect(text).toContain("Classification: applied");
+      expect(text).not.toContain(" 1#");
+      expect(text).not.toContain("+2#");
+      expect(text).not.toContain("│BBB");
       expect(result.details?.diff).toContain("+2");
       expect(result.details?.diff).toContain("│BBB");
       expect(result.details?.metrics).toMatchObject({
@@ -49,7 +47,7 @@ describe("edit tool text shape (token budget)", () => {
     });
   });
 
-  it("diff format uses aligned separators", async () => {
+  it("details diff format uses aligned separators", async () => {
     await withTempFile("sample.ts", "aaa\nbbb\nccc\n", async ({ cwd }) => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
@@ -72,10 +70,10 @@ describe("edit tool text shape (token budget)", () => {
         { cwd } as any,
       );
 
-      const text = getText(result);
-      expect(text).toMatch(/^ 1#\w{3}│aaa$/m);
-      expect(text).toMatch(/^\+2#\w{3}│BBB$/m);
-      expect(text).toMatch(/^-2   │bbb$/m);
+      const diff = result.details?.diff ?? "";
+      expect(diff).toMatch(/^ 1#\w{3}│aaa$/m);
+      expect(diff).toMatch(/^\+2#\w{3}│BBB$/m);
+      expect(diff).toMatch(/^-2   │bbb$/m);
     });
   });
 
@@ -138,7 +136,7 @@ describe("edit tool text shape (token budget)", () => {
     });
   });
 
-  it("allows full-file deletion for small files (≤50 lines) and shows diff", async () => {
+  it("allows full-file deletion for small files (≤50 lines) and stores diff in details", async () => {
     await withTempFile("sample.txt", "only\n", async ({ cwd }) => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
@@ -161,8 +159,8 @@ describe("edit tool text shape (token budget)", () => {
         { cwd } as any,
       );
 
-      const text = getText(result);
-      expect(text).toContain("-1   │only");
+      expect(getText(result)).not.toContain("-1   │only");
+      expect(result.details?.diff).toContain("-1   │only");
       expect(await readFile(`${cwd}/sample.txt`, "utf-8")).toBe("");
     });
   });
@@ -235,7 +233,7 @@ describe("edit tool text shape (token budget)", () => {
     });
   });
 
-  it("shows diff even for very long lines", async () => {
+  it("stores diff in details even for very long lines", async () => {
     const longLine = "a".repeat(60_000);
     await withTempFile("sample.txt", `before\n${longLine}\nafter\n`, async ({ cwd }) => {
       const { pi, getTool } = makeFakePiRegistry();
@@ -260,10 +258,11 @@ describe("edit tool text shape (token budget)", () => {
       );
 
       const text = getText(result);
-      // Diff always shown; no byte-budget omission
-      expect(text).toContain("-2   │");
-      expect(text).toContain("+2#");
-      expect(text).not.toContain("Anchors omitted");
+      const diff = result.details?.diff ?? "";
+      expect(text).not.toContain("-2   │");
+      expect(diff).toContain("-2   │");
+      expect(diff).toContain("+2#");
+      expect(diff).not.toContain("Anchors omitted");
     });
   });
 });

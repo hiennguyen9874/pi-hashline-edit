@@ -35,6 +35,12 @@ describe("assertInsertRequest", () => {
       assertInsertRequest({ path: "a.ts", edits: [] }),
     ).toThrow();
   });
+
+  it("rejects empty insert lines", () => {
+    expect(() =>
+      assertInsertRequest({ path: "a.ts", edits: [{ anchor: "abc", direction: "after", lines: [] }] }),
+    ).toThrow('Insert 1 requires non-empty "lines" array of strings.');
+  });
 });
 
 describe("insertToolSchema", () => {
@@ -67,6 +73,17 @@ describe("insertToolSchema", () => {
       validate({
         path: "a.ts",
         edits: [{ anchor: "abc", direction: "above", lines: ["x"] }],
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects empty lines", () => {
+    const ajv = new Ajv({ allErrors: true });
+    const validate = ajv.compile(insertToolSchema as any);
+    expect(
+      validate({
+        path: "a.ts",
+        edits: [{ anchor: "abc", direction: "after", lines: [] }],
       }),
     ).toBe(false);
   });
@@ -148,6 +165,25 @@ describe("insert tool execution", () => {
       expect(after).toContain("bbb");
       expect(after).toContain("ccc");
       expect(after.indexOf("bbb")).toBeLessThan(after.indexOf("ccc"));
+    });
+  });
+
+  it("rejects empty insert lines without mutating", async () => {
+    await withTempFile("sample.txt", "aaa\n", async ({ cwd, path }) => {
+      const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
+      registerInsert(pi);
+      const insertTool = getTool("insert");
+      const ctx = { cwd, ui: { notify() {} } } as any;
+
+      await expect(
+        insertTool.execute(
+          "i1",
+          { path: "sample.txt", edits: [{ anchor: "abc", direction: "after", lines: [] }] },
+          undefined, undefined, ctx,
+        ),
+      ).rejects.toThrow('Insert 1 requires non-empty "lines" array of strings.');
+      expect(await readFile(path, "utf-8")).toBe("aaa\n");
     });
   });
 

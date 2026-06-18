@@ -28,12 +28,13 @@ describe("chained edit anchors", () => {
         ctx,
       );
 
-      // Diff shows the change with new anchor
-      expect(editResult.content[0].text).toContain("+2#");
-      expect(editResult.content[0].text).toContain("│BETA");
+      // Details diff shows the change with new anchor.
+      expect(editResult.content[0].text).not.toContain("+2#");
+      expect(editResult.details?.diff).toContain("+2#");
+      expect(editResult.details?.diff).toContain("│BETA");
 
-      // Extract fresh anchor from diff and chain another edit
-      const freshRef = extractRef(editResult.content[0].text, "BETA");
+      // Extract fresh anchor from details diff and chain another edit.
+      const freshRef = extractRef(editResult.details?.diff ?? "", "BETA");
 
       const editResult2 = await editTool.execute(
         "e2",
@@ -43,8 +44,8 @@ describe("chained edit anchors", () => {
         ctx,
       );
 
-      expect(editResult2.content[0].text).toContain("+2#");
-      expect(editResult2.content[0].text).toContain("│BETA-CHAINED");
+      expect(editResult2.details?.diff).toContain("+2#");
+      expect(editResult2.details?.diff).toContain("│BETA-CHAINED");
     });
   });
 
@@ -71,9 +72,9 @@ describe("chained edit anchors", () => {
         ctx,
       );
 
-      // Diff is always shown; no "anchors omitted" fallback
-      expect(editResult.content[0].text).toMatch(/\+\s*1#/);
-      expect(editResult.content[0].text).not.toContain("Anchors omitted");
+      expect(editResult.content[0].text).not.toMatch(/\+\s*1#/);
+      expect(editResult.details?.diff).toMatch(/\+\s*1#/);
+      expect(editResult.details?.diff).not.toContain("Anchors omitted");
     });
   });
 
@@ -97,8 +98,8 @@ describe("chained edit anchors", () => {
         ctx,
       );
 
-      expect(editResult.content[0].text).toContain("+2#");
-      expect(editResult.content[0].text).toContain("│appended");
+      expect(editResult.details?.diff).toContain("+2#");
+      expect(editResult.details?.diff).toContain("│appended");
     });
   });
 
@@ -122,8 +123,8 @@ describe("chained edit anchors", () => {
         ctx,
       );
 
-      expect(editResult.content[0].text).toContain("+1#");
-      expect(editResult.content[0].text).toContain("│prepended");
+      expect(editResult.details?.diff).toContain("+1#");
+      expect(editResult.details?.diff).toContain("│prepended");
     });
   });
 
@@ -148,7 +149,7 @@ describe("chained edit anchors", () => {
       );
 
       // No empty hashline anchors like "3#09:" should appear
-      const anchorLines = editResult.content[0].text
+      const anchorLines = (editResult.details?.diff ?? "")
         .split("\n")
         .filter((line: string) => line.match(/^[+\- ]\s*\d+#\w{3}│.*/));
       for (const line of anchorLines) {
@@ -178,15 +179,14 @@ describe("chained edit anchors", () => {
         ctx,
       );
 
-      // Diff always shown; no budget-based omission
-      expect(editResult.content[0].text).toMatch(/\+\s*2#/);
-      expect(editResult.content[0].text).not.toContain("Anchors omitted");
+      expect(editResult.content[0].text).not.toMatch(/\+\s*2#/);
+      expect(editResult.details?.diff).toMatch(/\+\s*2#/);
+      expect(editResult.details?.diff).not.toContain("Anchors omitted");
     });
   });
 
   it("distant unchanged line anchors remain valid after chained edits", async () => {
-    // Context hashing: only immediate neighbors affect the hash. Editing line 4
-    // of a 4-line file should not invalidate line 1's anchor.
+    // Perfect per-file anchors keep distant unchanged lines addressable after edits.
     await withTempFile("stale.ts", "a\nb\nc\nd\n", async ({ cwd }) => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
@@ -226,8 +226,8 @@ describe("chained edit anchors", () => {
         undefined,
         ctx,
       );
-      expect(aEdit.content[0].text).toContain("+1#");
-      expect(aEdit.content[0].text).toContain("│A");
+      expect(aEdit.details?.diff).toContain("+1#");
+      expect(aEdit.details?.diff).toContain("│A");
     });
   });
 });

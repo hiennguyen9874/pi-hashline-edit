@@ -96,7 +96,7 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
     let fuzzyEdits: HashlineEdit[] = [];
     let remaining = exactResult.unmatched;
 
-    // Tier 2: hash-based fuzzy — search +-N lines for anchor hash
+    // Tier 2: hash-only relocation against the current perfect hash map.
     if (remaining.length > 0) {
       const fuzzyResult = fuzzyMatch(remaining, currentFile);
       fuzzyEdits = fuzzyResult.matched;

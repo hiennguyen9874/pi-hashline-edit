@@ -189,6 +189,27 @@ describe("grep tool execution", () => {
     }
   });
 
+  it.skipIf(!rgAvailable)("enforces match limit globally across files", async () => {
+    const tmp = tempDir();
+    try {
+      tmp.add("a.ts", "hit a1\nhit a2\nhit a3\n");
+      tmp.add("b.ts", "hit b1\nhit b2\nhit b3\n");
+
+      const result = await grepToolDefinition.execute(
+        "g1",
+        { pattern: "hit", path: tmp.dir, limit: 3 },
+        undefined,
+      );
+
+      const text = (result as any).content[0].text;
+      const matchLines = text.split("\n").filter((line: string) => /│hit /.test(line));
+      expect(matchLines).toHaveLength(3);
+      expect(text).toContain("3 matches limit reached");
+    } finally {
+      tmp.cleanup();
+    }
+  });
+
   it.skipIf(!rgAvailable)("returns 'No matches found' for non-matching pattern", async () => {
     const tmp = tempDir();
     try {

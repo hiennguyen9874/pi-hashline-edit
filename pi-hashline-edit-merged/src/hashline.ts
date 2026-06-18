@@ -1,8 +1,7 @@
 /**
  * Hashline engine — hash-anchored line editing.
  *
- * Originally vendored & adapted from oh-my-pi (MIT, github.com/can1357/oh-my-pi).
- * Hash algorithm: inline FNV-1a with surrounding-line context.
+ * Uses 3-character xxHash anchors with per-file collision resolution.
  */
 
 import { computeLineHashes, computeLineHash as computeSingleLineHash, HASH_RE, HASH_CHARS_CLASS } from "./hash-format";

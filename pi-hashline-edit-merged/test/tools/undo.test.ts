@@ -47,7 +47,7 @@ describe("undo tool", () => {
       _setLastSnapshot("sample.ts", "alpha\nbeta\n");
 
       const undoResult = await undoTool.execute("u1", {}, undefined, undefined, ctx);
-      expect(undoResult.content[0].text).toContain("│beta");
+      expect(undoResult.details?.diff).toContain("│beta");
 
       // Verify file is restored
       const afterUndo = await readTool.execute("r2", { path: "sample.ts" }, undefined, undefined, ctx);
