@@ -43,6 +43,12 @@ describe("extension registration", () => {
     const readTool = collectToolDefinitions(registerCore).find((tool) => tool.name === "read");
 
     expect(readTool?.promptGuidelines).toContain(
+      "Use read before edit or insert when you do not have current 3-character hash anchors for the file.",
+    );
+    expect(readTool?.promptGuidelines).toContain(
+      "Use insert when only adding lines; use edit when replacing or deleting existing lines.",
+    );
+    expect(readTool?.promptGuidelines).toContain(
       "If an edit or insert result shows fresh anchors for the line you need, reuse those anchors for follow-up edits instead of calling read again.",
     );
     expect(readTool?.promptGuidelines).toContain(
@@ -61,6 +67,7 @@ describe("extension registration", () => {
     const insertTool = collectToolDefinitions(registerInsert).find((tool) => tool.name === "insert");
 
     expect(insertTool?.promptSnippet).toContain("insert: Insert new lines");
+    expect(insertTool?.promptSnippet).toContain("Use when you only need to add content.");
   });
 
   it("undo remains available as an optional extension", () => {

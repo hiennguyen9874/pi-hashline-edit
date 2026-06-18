@@ -234,6 +234,44 @@ describe("edit tool text shape (token budget)", () => {
     });
   });
 
+  it("caps model-visible fresh anchors for large replacements", async () => {
+    const originalLines = Array.from({ length: 20 }, (_, index) => `line ${index + 1}`);
+    const replacementLines = Array.from({ length: 20 }, (_, index) => `LINE ${index + 1}`);
+    await withTempFile("large.txt", `${originalLines.join("\n")}\n`, async ({ cwd }) => {
+      const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
+      const editTool = getTool("edit");
+      const firstRef = computeLineHash(originalLines, 0);
+      const lastRef = computeLineHash(originalLines, originalLines.length - 1);
+
+      const result = await editTool.execute(
+        "e1",
+        {
+          path: "large.txt",
+          edits: [
+            {
+              start: firstRef, end: lastRef,
+              lines: replacementLines,
+            },
+          ],
+        },
+        undefined,
+        undefined,
+        { cwd } as any,
+      );
+
+      const text = getText(result);
+      const freshAnchorLines = text
+        .split("\n")
+        .filter((line) => /^[A-Za-z0-9_-]{3}│/.test(line));
+      expect(freshAnchorLines).toHaveLength(12);
+      expect(text).toContain("│LINE 1");
+      expect(text).toContain("│LINE 12");
+      expect(text).not.toContain("│LINE 13");
+      expect(result.details?.diff).toContain("│LINE 20");
+    });
+  });
+
   it("stores diff in details even for very long lines", async () => {
     const longLine = "a".repeat(60_000);
     await withTempFile("sample.txt", `before\n${longLine}\nafter\n`, async ({ cwd }) => {

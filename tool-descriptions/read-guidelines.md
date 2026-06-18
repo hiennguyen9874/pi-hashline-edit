@@ -1,4 +1,5 @@
-- Use read before edit when you do not have current 3-character hash anchors for the file.
+- Use read before edit or insert when you do not have current 3-character hash anchors for the file.
+- Use insert when only adding lines; use edit when replacing or deleting existing lines.
 - If an edit or insert result shows fresh anchors for the line you need, reuse those anchors for follow-up edits instead of calling read again.
 - If read is truncated, continue with the `offset` it suggests — do not guess unseen lines.
 - For simple file creation requests, write only the requested content unless the user asks for structure.
