@@ -86,7 +86,7 @@ const HASHLINE_PREFIX_RE = new RegExp(
   `^\\s*(?:>>>|>>)?\\s*(?:\\d+\\s*${ANCHOR_SEP}\\s*)?(${HASH_CHARS_CLASS})${CONTENT_SEP}`);
 const HASHLINE_PREFIX_PLUS_RE = new RegExp(
   `^\\+\\s*(?:\\d+\\s*${ANCHOR_SEP}\\s*)?(${HASH_CHARS_CLASS})${CONTENT_SEP}`);
-const DIFF_MINUS_RE = /^-\s*\d+\s{4}/;
+const DIFF_MINUS_RE = /^-\s*\d+\s{3,}│/;
 
 // ─── Parsing ────────────────────────────────────────────────────────────
 

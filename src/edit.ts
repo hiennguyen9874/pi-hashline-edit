@@ -43,7 +43,7 @@ const editEntrySchema = Type.Object(
   },
   { additionalProperties: false },
 );
-export const hashlineEditToolSchema = Type.Object(
+const anchoredEditRequestSchema = Type.Object(
   {
     path: Type.String({ description: "path" }),
     edits: Type.Array(editEntrySchema, {
@@ -52,6 +52,30 @@ export const hashlineEditToolSchema = Type.Object(
   },
   { additionalProperties: false },
 );
+
+const legacyCamelEditRequestSchema = Type.Object(
+  {
+    path: Type.String({ description: "path" }),
+    oldText: Type.String({ description: "Exact unique text to replace. Compatibility only; hash anchors are preferred." }),
+    newText: Type.String({ description: "Replacement text. Compatibility only; hash anchors are preferred." }),
+  },
+  { additionalProperties: false },
+);
+
+const legacySnakeEditRequestSchema = Type.Object(
+  {
+    path: Type.String({ description: "path" }),
+    old_text: Type.String({ description: "Exact unique text to replace. Compatibility only; hash anchors are preferred." }),
+    new_text: Type.String({ description: "Replacement text. Compatibility only; hash anchors are preferred." }),
+  },
+  { additionalProperties: false },
+);
+
+export const hashlineEditToolSchema = Type.Union([
+  anchoredEditRequestSchema,
+  legacyCamelEditRequestSchema,
+  legacySnakeEditRequestSchema,
+]);
 
 
 type EditRequestParams = {
@@ -173,7 +197,7 @@ export async function resolveEditTarget(
   if (file.kind === "directory") {
     return {
       ok: false,
-      error: `Path is a directory: ${path}. Use ls to inspect directories.`,
+      error: `Path is a directory: ${path}. Read a specific file instead.`,
     };
   }
   if (file.kind === "image") {
@@ -525,8 +549,14 @@ const editToolDefinition: EditToolDefinition = {
 
 let _editPi: ExtensionAPI | undefined;
 
-export function emitUndoSnapshot(pi: ExtensionAPI | undefined, path: string, absolutePath: string, beforeContent: string): void {
-  pi?.events?.emit("hashline:edit-applied", { path, absolutePath, beforeContent });
+export function emitUndoSnapshot(
+  pi: ExtensionAPI | undefined,
+  path: string,
+  absolutePath: string,
+  beforeContent: string,
+  afterContent: string,
+): void {
+  pi?.events?.emit("hashline:edit-applied", { path, absolutePath, beforeContent, afterContent });
 }
 
 export function registerEditTool(pi: ExtensionAPI): void {

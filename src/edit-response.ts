@@ -82,6 +82,25 @@ function warningsBlockOf(warnings: string[] | undefined): string {
   return warnings?.length ? `\n\nWarnings:\n${warnings.join("\n")}` : "";
 }
 
+function changedAnchorsBlockOf(diff: string): string {
+  if (!diff) return "";
+
+  const anchors: string[] = [];
+  const seen = new Set<string>();
+  for (const line of diff.split("\n")) {
+    if (!line.startsWith(" ") && !line.startsWith("+")) continue;
+    const match = line.match(/^[ +]\s*\d+#([A-Za-z0-9_-]{3})│(.*)$/);
+    if (!match) continue;
+    const rendered = `${match[1]}│${match[2]}`;
+    if (seen.has(rendered)) continue;
+    seen.add(rendered);
+    anchors.push(rendered);
+    if (anchors.length === 12) break;
+  }
+
+  return anchors.length ? `Fresh anchors:\n${anchors.join("\n")}` : "";
+}
+
 // ─── Builders ───────────────────────────────────────────────────────────
 
 export function buildNoopResponse(input: NoopResponseInput): ToolResult {
@@ -131,8 +150,13 @@ export function buildChangedResponse(input: SuccessResponseInput): ToolResult {
   const addedLines = countDiffLines(diffResult.diff, "+");
   const removedLines = countDiffLines(diffResult.diff, "-");
   const warningsBlock = warningsBlockOf(warnings);
+  const changedAnchorsBlock = changedAnchorsBlockOf(diffResult.diff);
 
-  const text = [`Applied changes to ${input.path}\nClassification: applied`, warningsBlock.trimStart()]
+  const text = [
+    `Applied changes to ${input.path}\nClassification: applied`,
+    warningsBlock.trimStart(),
+    changedAnchorsBlock,
+  ]
     .filter((section) => section.length > 0)
     .join("\n\n");
 

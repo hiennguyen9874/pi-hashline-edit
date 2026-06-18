@@ -199,7 +199,7 @@ export function registerReadTool(pi: ExtensionAPI): void {
           .join("\n");
         const cap = entries.length > 50 ? `\n  ... and ${entries.length - 50} more` : "";
         throw new Error(
-          `Path is a directory: ${rawPath}\n${listing}${cap}\n\nUse ls to explore further or read a specific file.`,
+          `Path is a directory: ${rawPath}\n${listing}${cap}\n\nRead a specific file to view hashline anchors.`, 
         );
       }
 

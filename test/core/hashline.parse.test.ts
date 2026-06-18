@@ -50,15 +50,15 @@ describe("hashlineParseText", () => {
     ).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
   });
 
-  it("rejects diff-preview deletion rows", () => {
+  it("rejects current deletion diff rows", () => {
     expect(() =>
-      hashlineParseText(["aB3│keep", "-10    old", "qR2│after"]),
-    ).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
+      hashlineParseText(["-2   │bbb"]),
+    ).toThrow(/^\[E_INVALID_PATCH\]/);
   });
 
   it("rejects string-form rendered diff hunks", () => {
-    const input = "aB3│keep\n-10    old\n+xY7│new\nqR2│after";
-    expect(() => hashlineParseText(input)).toThrow(/^\[E_BARE_HASH_PREFIX\]/);
+    const input = "-2   │bbb";
+    expect(() => hashlineParseText(input)).toThrow(/^\[E_INVALID_PATCH\]/);
   });
 });
 

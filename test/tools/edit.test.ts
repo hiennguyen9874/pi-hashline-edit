@@ -57,9 +57,17 @@ describe("registerEditTool", () => {
     ).toBe(false);
   });
 
-  it("publishes a top-level object schema for pi tool registration", () => {
-    expect((hashlineEditToolSchema as any).type).toBe("object");
-    expect((hashlineEditToolSchema as any).anyOf).toBeUndefined();
+  it("publishes a schema that validates legacy oldText/newText payloads", () => {
+    const ajv = new Ajv({ allErrors: true });
+    const validate = ajv.compile(hashlineEditToolSchema as any);
+
+    expect(
+      validate({
+        path: "a.ts",
+        oldText: "before",
+        newText: "after",
+      }),
+    ).toBe(true);
   });
 
   it("registers the edit tool without a prepareArguments shim", () => {
@@ -82,6 +90,26 @@ describe("registerEditTool", () => {
 
     expect(registered?.parameters).toEqual(hashlineEditToolSchema);
     expect(registered?.prepareArguments).toBeUndefined();
+  });
+
+  it("normalizes legacy oldText/newText through the registered tool path", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { pi, getTool } = makeFakePiRegistry();
+      registerEditTool(pi);
+      const editTool = getTool("edit");
+
+      const result = await editTool.execute(
+        "e1",
+        { path: "sample.txt", oldText: "beta", newText: "BETA" },
+        undefined,
+        undefined,
+        { cwd } as any,
+      );
+
+      expect(result.isError).not.toBe(true);
+      expect(result.content[0].text).toContain("[LEGACY_NORMALIZED]");
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
+    });
   });
 
   it("edits a single line using hash-only start/end anchors", async () => {

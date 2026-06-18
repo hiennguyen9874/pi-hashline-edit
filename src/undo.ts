@@ -31,6 +31,7 @@ const MAX_UNDO_TURNS = 3;
 type Snapshot = {
   path: string;
   content: string;
+  expectedContent?: string;
   turnIndex: number;
 };
 
@@ -128,6 +129,12 @@ const undoToolDefinition: ToolDefinition<
       const currentNormalized = normalizeToLF(currentText);
       const restoredContent = entry.content;
 
+      if (entry.expectedContent !== undefined && currentNormalized !== entry.expectedContent) {
+        throw new Error(
+          "[E_UNDO_DIVERGED] File has changed since the edit being undone. Refusing to overwrite unrelated changes.",
+        );
+      }
+
       if (currentNormalized === restoredContent) {
         return {
           content: [{ type: "text", text: "No changes needed. File already matches the pre-edit state." }],
@@ -161,8 +168,13 @@ const undoToolDefinition: ToolDefinition<
 // ─── Test helpers ────────────────────────────────────────────────────────
 
 /** Set the last undo snapshot directly. For testing only. */
-export function _setLastSnapshot(path: string, content: string, turnIndex?: number): void {
-  lastSnapshot = { path, content: normalizeToLF(content), turnIndex: turnIndex ?? currentTurnIndex };
+export function _setLastSnapshot(path: string, content: string, turnIndex?: number, expectedContent?: string): void {
+  lastSnapshot = {
+    path,
+    content: normalizeToLF(content),
+    ...(expectedContent !== undefined ? { expectedContent: normalizeToLF(expectedContent) } : {}),
+    turnIndex: turnIndex ?? currentTurnIndex,
+  };
 }
 
 /** Override the current turn index. For testing only. */
@@ -185,10 +197,11 @@ export function registerUndoTool(pi: ExtensionAPI): void {
     currentTurnIndex = event.turnIndex;
   });
 
-  pi.events.on("hashline:edit-applied", (data: { path: string; absolutePath: string; beforeContent: string }) => {
+  pi.events.on("hashline:edit-applied", (data: { path: string; absolutePath: string; beforeContent: string; afterContent: string }) => {
     lastSnapshot = {
       path: data.path,
       content: data.beforeContent,
+      expectedContent: data.afterContent,
       turnIndex: currentTurnIndex,
     };
   });

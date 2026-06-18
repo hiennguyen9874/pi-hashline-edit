@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { detectLineEnding, normalizeToLF, stripBom } from "../../src/edit-diff";
+import { beforeAll, describe, expect, it } from "vitest";
+import { detectLineEnding, generateDiffString, normalizeToLF, stripBom } from "../../src/edit-diff";
+import { ensureHasherReady } from "../../src/hash-format";
+import { buildHashlineFile } from "../../src/hashline";
+
+beforeAll(async () => {
+  await ensureHasherReady();
+});
 
 // ─── detectLineEnding ───────────────────────────────────────────────────
 
@@ -46,6 +52,22 @@ describe("normalizeToLF", () => {
 
   it("returns empty string for empty input", () => {
     expect(normalizeToLF("")).toBe("");
+  });
+});
+
+// ─── stripBom ───────────────────────────────────────────────────────────
+
+// ─── generateDiffString ─────────────────────────────────────────────────
+
+describe("generateDiffString", () => {
+  it("uses collision-resolved per-file hashes for repeated added lines", () => {
+    const newContent = "same\nsame\n";
+    const { diff } = generateDiffString("same\n", newContent);
+    const newFile = buildHashlineFile(newContent);
+
+    expect(newFile.lineHashes[0]).not.toBe(newFile.lineHashes[1]);
+    expect(diff).toContain(` 1#${newFile.lineHashes[0]}│same`);
+    expect(diff).toContain(`+2#${newFile.lineHashes[1]}│same`);
   });
 });
 

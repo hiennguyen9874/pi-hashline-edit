@@ -1,3 +1,4 @@
+import { writeFile } from "fs/promises";
 import { describe, expect, it } from "vitest";
 import registerCore from "../../extensions/core";
 import registerUndo from "../../extensions/undo";
@@ -44,7 +45,7 @@ describe("undo tool", () => {
         ctx,
       );
 
-      _setLastSnapshot("sample.ts", "alpha\nbeta\n");
+      _setLastSnapshot("sample.ts", "alpha\nbeta\n", undefined, "alpha\nBETA\n");
 
       const undoResult = await undoTool.execute("u1", {}, undefined, undefined, ctx);
       expect(undoResult.details?.diff).toContain("│beta");
@@ -81,7 +82,7 @@ describe("undo tool", () => {
         ctx,
       );
 
-      _setLastSnapshot("sample.ts", "alpha\n");
+      _setLastSnapshot("sample.ts", "alpha\n", undefined, "ALPHA\n");
 
       await undoTool.execute("u1", {}, undefined, undefined, ctx);
       await expect(
@@ -123,6 +124,21 @@ describe("undo tool", () => {
     });
   });
 
+  it("rejects when the file diverged after the edit", async () => {
+    await withTempFile("sample.ts", "alpha\nBETA\n", async ({ cwd, path }) => {
+      const { pi, getTool } = makeFakePiRegistry();
+      registerUndo(pi);
+      const undoTool = getTool("undo");
+
+      await writeFile(path, "alpha\nBETA\nunrelated\n");
+      _setLastSnapshot("sample.ts", "alpha\nbeta\n", undefined, "alpha\nBETA\n");
+
+      await expect(
+        undoTool.execute("u1", {}, undefined, undefined, { cwd } as any),
+      ).rejects.toThrow(/E_UNDO_DIVERGED/);
+    });
+  });
+
   it("rejects when the edit is too old", async () => {
     await withTempFile("sample.ts", "alpha\n", async ({ cwd }) => {
       const { pi, getTool } = makeFakePiRegistry();
@@ -157,7 +173,7 @@ describe("undo tool", () => {
       ).rejects.toThrow(/turns ago/);
     });
   });
-  });
+});
 
 describe("undo state helpers", () => {
   it("_setLastSnapshot and _resetUndo work", () => {

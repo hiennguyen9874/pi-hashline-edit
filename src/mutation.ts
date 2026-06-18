@@ -208,7 +208,7 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
     );
     const updatedSnapshotId = (await getFileSnapshot(absolutePath)).snapshotId;
 
-    emitUndoSnapshot(pi, path, absolutePath, originalNormalized);
+    emitUndoSnapshot(pi, path, absolutePath, originalNormalized, result);
 
     return buildChangedResponse({
       path,

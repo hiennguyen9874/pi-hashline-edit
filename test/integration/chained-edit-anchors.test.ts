@@ -28,13 +28,14 @@ describe("chained edit anchors", () => {
         ctx,
       );
 
-      // Details diff shows the change with new anchor.
+      // Model-visible text shows compact fresh anchors without diff prefixes.
       expect(editResult.content[0].text).not.toContain("+2#");
+      expect(editResult.content[0].text).toContain("│BETA");
       expect(editResult.details?.diff).toContain("+2#");
       expect(editResult.details?.diff).toContain("│BETA");
 
-      // Extract fresh anchor from details diff and chain another edit.
-      const freshRef = extractRef(editResult.details?.diff ?? "", "BETA");
+      // Extract fresh anchor from model-visible text and chain another edit.
+      const freshRef = extractRef(editResult.content[0].text ?? "", "BETA");
 
       const editResult2 = await editTool.execute(
         "e2",
