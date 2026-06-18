@@ -14,7 +14,7 @@ describe("edit tool text shape (token budget)", () => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
-      const bRef = `2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}`;
+      const bRef = computeLineHash(["aaa", "bbb", "ccc"], 1);
 
       const result = await editTool.execute(
         "e1",
@@ -22,7 +22,7 @@ describe("edit tool text shape (token budget)", () => {
           path: "sample.ts",
           edits: [
             {
-              range: [bRef, bRef],
+              start: bRef, end: bRef,
               lines: ["BBB"],
             },
           ],
@@ -54,7 +54,7 @@ describe("edit tool text shape (token budget)", () => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
-      const bRef = `2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}`;
+      const bRef = computeLineHash(["aaa", "bbb", "ccc"], 1);
 
       const result = await editTool.execute(
         "e1",
@@ -62,7 +62,7 @@ describe("edit tool text shape (token budget)", () => {
           path: "sample.ts",
           edits: [
             {
-              range: [bRef, bRef],
+              start: bRef, end: bRef,
               lines: ["BBB"],
             },
           ],
@@ -73,8 +73,8 @@ describe("edit tool text shape (token budget)", () => {
       );
 
       const text = getText(result);
-      expect(text).toMatch(/^ 1#\w{2}│aaa$/m);
-      expect(text).toMatch(/^\+2#\w{2}│BBB$/m);
+      expect(text).toMatch(/^ 1#\w{3}│aaa$/m);
+      expect(text).toMatch(/^\+2#\w{3}│BBB$/m);
       expect(text).toMatch(/^-2   │bbb$/m);
     });
   });
@@ -84,7 +84,7 @@ describe("edit tool text shape (token budget)", () => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
-      const bRef = `2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}`;
+      const bRef = computeLineHash(["aaa", "bbb", "ccc"], 1);
 
       const result = await editTool.execute(
         "e1",
@@ -92,7 +92,7 @@ describe("edit tool text shape (token budget)", () => {
           path: "sample.txt",
           edits: [
             {
-              range: [bRef, bRef],
+              start: bRef, end: bRef,
               lines: ["BBB"],
             },
           ],
@@ -114,7 +114,7 @@ describe("edit tool text shape (token budget)", () => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
-      const bRef = `2#${computeLineHash(["aaa", "bbb", "ccc"], 1)}`;
+      const bRef = computeLineHash(["aaa", "bbb", "ccc"], 1);
 
       const result = await editTool.execute(
         "e1",
@@ -122,7 +122,7 @@ describe("edit tool text shape (token budget)", () => {
           path: "sample.txt",
           edits: [
             {
-              range: [bRef, bRef],
+              start: bRef, end: bRef,
               lines: ["bbb"],
             },
           ],
@@ -143,7 +143,7 @@ describe("edit tool text shape (token budget)", () => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
-      const oRef = `1#${computeLineHash(["only"], 0)}`;
+      const oRef = computeLineHash(["only"], 0);
 
       const result = await editTool.execute(
         "e1",
@@ -151,7 +151,7 @@ describe("edit tool text shape (token budget)", () => {
           path: "sample.txt",
           edits: [
             {
-              range: [oRef, oRef],
+              start: oRef, end: oRef,
               lines: [],
             },
           ],
@@ -174,8 +174,8 @@ describe("edit tool text shape (token budget)", () => {
       registerCore(pi);
       const editTool = getTool("edit");
       const fileLines = Array.from({ length: 55 }, (_, i) => `line ${i + 1}`);
-      const firstRef = `1#${computeLineHash(fileLines, 0)}`;
-      const lastRef = `55#${computeLineHash(fileLines, 54)}`;
+      const firstRef = computeLineHash(fileLines, 0);
+      const lastRef = computeLineHash(fileLines, 54);
 
       await expect(
         editTool.execute(
@@ -184,7 +184,7 @@ describe("edit tool text shape (token budget)", () => {
             path: "big.txt",
             edits: [
               {
-                range: [firstRef, lastRef],
+                start: firstRef, end: lastRef,
                 lines: [],
               },
             ],
@@ -203,7 +203,7 @@ describe("edit tool text shape (token budget)", () => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
-      const lRef = `2#${computeLineHash(["before", longLine, "after"], 1)}`;
+      const lRef = computeLineHash(["before", longLine, "after"], 1);
 
       const result = await editTool.execute(
         "e1",
@@ -211,7 +211,7 @@ describe("edit tool text shape (token budget)", () => {
           path: "sample.txt",
           edits: [
             {
-              range: [lRef, lRef],
+              start: lRef, end: lRef,
               lines: [`b${longLine.slice(1)}`],
             },
           ],

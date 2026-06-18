@@ -23,7 +23,7 @@ describe("strict hashline tool loop", () => {
         "e1",
         {
           path: "sample.ts",
-          edits: [{ range: [betaRef, betaRef], lines: ["BETA1"] }],
+          edits: [{ start: betaRef, end: betaRef, lines: ["BETA1"] }],
         },
         undefined,
         undefined,
@@ -35,7 +35,7 @@ describe("strict hashline tool loop", () => {
           "e2",
           {
             path: "sample.ts",
-            edits: [{ range: [betaRef, betaRef], lines: ["BETA2"] }],
+            edits: [{ start: betaRef, end: betaRef, lines: ["BETA2"] }],
           },
           undefined,
           undefined,
@@ -54,7 +54,7 @@ describe("strict hashline tool loop", () => {
         "e3",
         {
           path: "sample.ts",
-          edits: [{ range: [freshRef, freshRef], lines: ["BETA2"] }],
+          edits: [{ start: freshRef, end: freshRef, lines: ["BETA2"] }],
         },
         undefined,
         undefined,

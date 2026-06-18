@@ -19,30 +19,34 @@
   - Classification: fixed problematic deviation.
 
 ## Plan Deviations
-- **Problematic deviation:** Full-suite validation remains red because many existing tests still exercise old `range: [...]`/`LINE#HASH` assumptions after the public edit schema changed to `start`/`end`.
-  - Evidence: `npm test` still fails with 55 failures. Examples from the recheck include `test/integration/strict-hashline-loop.test.ts`, `test/core/hashline-strict-input.test.ts`, `test/integration/stale-position-compound.test.ts`, `test/tools/grep.test.ts`, and `test/tools/file-kind.test.ts`.
-  - Classification: problematic deviation for repository-wide verification; acceptable deferral only if these tests are explicitly assigned to later hardening/grep phases.
-  - Required fix: migrate remaining legacy tests/callers to the new hash-only schema, or document the deferral in the phase/plan verification contract.
-- **Evidence the original plan should be updated:** Optional grep runtime and grep tests remain line-qualified/old-protocol oriented while grep docs now warn not to copy grep anchors into mutating tools.
-  - Evidence: `pi-hashline-edit-merged/src/grep.ts:5` still documents `LINE#HASH│` output, and `npm test` still has grep failures around matching read-tool hashes / using grep anchors in edit.
-  - Classification: evidence the original plan should be updated or Phase 5 should explicitly own grep protocol adaptation.
-  - Required fix: clarify whether grep adaptation is Phase 5-only; if not, update grep runtime/tests now.
+- **Fixed:** Full-suite validation no longer remains red from old `range: [...]`/`LINE#HASH` assumptions.
+  - Evidence: legacy edit/integration/metrics/snapshot/undo tests were migrated to `start`/`end` hash-only anchors where they exercise the public edit schema.
+  - Classification: fixed.
+  - Verification: `cd pi-hashline-edit-merged && npm test` passes 34 files / 274 tests.
+- **Fixed:** Optional grep runtime and grep tests now align with the hash-only/read-compatible contract.
+  - Evidence: `pi-hashline-edit-merged/src/grep.ts` formats grep rows through `formatAnchorPrefix`, awaits hasher readiness, and grep tests expect 3-character hash-only anchors matching read output.
+  - Classification: fixed.
+  - Verification: included in passing `npm test`.
 
 ## Scope Creep / Missing Scope
-- **Missing scope:** Several non-focused but existing tests that exercise edit behavior were not updated after the schema change, leaving stale test intent in the repository.
-  - Classification: problematic deviation for full-suite health; likely deferred scope for later hardening if Phase 3 intentionally owns only focused tests.
-- **Acceptable tradeoff:** The grep model-visible descriptions were touched even though optional grep behavior is Phase 5. This is acceptable because Phase 3 verification checks tool descriptions and the new text explicitly warns not to copy grep anchors into edit/insert.
+- **Fixed:** Existing tests that exercise edit behavior have been updated after the schema change, removing stale `range: [...]` and line-qualified mutating-anchor intent.
+  - Classification: fixed.
+- **Acceptable tradeoff:** The grep model-visible descriptions and optional grep runtime were touched even though optional grep behavior is Phase 5. This is acceptable because Phase 3 verification checks tool descriptions and grep now follows the same hash-only anchor display helper.
 
 ## Tests vs Required Behavior
 - Focused Phase 3 command: **pass** — 7 files / 87 tests passed.
-- Full `npm test`: **fail** — still 55 failures.
-- Required Phase 3 behavior covered by focused tests includes hash-only read output, line-qualified anchor rejection, hash-only edit/insert execution, optional `current` mismatch handling, and hashline core parsing/apply behavior.
-- Behavior not fully aligned repository-wide: legacy tests and optional grep expectations still assume old line-qualified/context-hash behavior.
+- Full `npm test`: **pass** — 34 files / 274 tests passed.
+- Required Phase 3 behavior covered by tests includes hash-only read output, line-qualified anchor rejection, hash-only edit/insert execution, optional `current` mismatch handling, hashline core parsing/apply behavior, repository-wide edit callers, and optional grep hash-only/read-compatible output.
 
 ## Spec Alignment Verdict
-- Pass with issues
-- Reason: Explicit Phase 3 core behavior and focused verification now align, and the prior stale grep tool-description issue is fixed. Remaining failures are important repository-wide legacy/optional-tool test debt, but they exceed the focused Phase 3 verification command unless the plan is interpreted as requiring full-suite green status at this phase.
+- Pass
+- Reason: Explicit Phase 3 core behavior, model-visible descriptions, optional grep protocol behavior, and repository-wide verification now align.
 
 ## Required Fixes
 1. Migrate remaining legacy tests/callers from `range: [...]` and line-qualified anchors to `start`/`end` hash-only anchors, or document them as deferred Phase 4/5/final-hardening work with an adjusted verification contract.
+   - Status: fixed.
+   - Verification: `cd pi-hashline-edit-merged && npm test` passes 34 files / 274 tests.
 2. Clarify grep ownership: either explicitly defer grep runtime/test protocol adaptation to Phase 5, or update `src/grep.ts` and grep tests to match the new hash-only/read-compatible contract.
+   - Status: fixed.
+   - Resolution: grep runtime/tests were updated now to match the hash-only/read-compatible contract.
+   - Verification: included in passing `npm test`.

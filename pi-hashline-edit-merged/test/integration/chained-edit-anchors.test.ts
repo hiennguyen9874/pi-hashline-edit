@@ -4,7 +4,7 @@ import { makeFakePiRegistry, withTempFile } from "../support/fixtures";
 
 function extractRef(text: string, content: string): string {
   const line = text.split("\n").find((l: string) => l.includes(`│${content}`))!;
-  return line.split("│")[0]!.replace(/^[+\- ]/, "").trim();
+  return line.split("│")[0]!.replace(/^[+\- ]/, "").trim().replace(/^\d+#/, "");
 }
 
 describe("chained edit anchors", () => {
@@ -22,7 +22,7 @@ describe("chained edit anchors", () => {
 
       const editResult = await editTool.execute(
         "e1",
-        { path: "sample.ts", edits: [{ range: [betaRef, betaRef], lines: ["BETA"] }] },
+        { path: "sample.ts", edits: [{ start: betaRef, end: betaRef, lines: ["BETA"] }] },
         undefined,
         undefined,
         ctx,
@@ -37,7 +37,7 @@ describe("chained edit anchors", () => {
 
       const editResult2 = await editTool.execute(
         "e2",
-        { path: "sample.ts", edits: [{ range: [freshRef, freshRef], lines: ["BETA-CHAINED"] }] },
+        { path: "sample.ts", edits: [{ start: freshRef, end: freshRef, lines: ["BETA-CHAINED"] }] },
         undefined,
         undefined,
         ctx,
@@ -65,7 +65,7 @@ describe("chained edit anchors", () => {
       const newLines = Array.from({ length: 15 }, (_, i) => `NEW ${i + 1}`);
       const editResult = await editTool.execute(
         "e1",
-        { path: "big.ts", edits: [{ range: [line1Ref, line15Ref], lines: newLines }] },
+        { path: "big.ts", edits: [{ start: line1Ref, end: line15Ref, lines: newLines }] },
         undefined,
         undefined,
         ctx,
@@ -91,7 +91,7 @@ describe("chained edit anchors", () => {
 
       const editResult = await editTool.execute(
         "e1",
-        { path: "app.ts", edits: [{ range: [existingRef, existingRef], lines: ["existing", "appended"] }] },
+        { path: "app.ts", edits: [{ start: existingRef, end: existingRef, lines: ["existing", "appended"] }] },
         undefined,
         undefined,
         ctx,
@@ -116,7 +116,7 @@ describe("chained edit anchors", () => {
 
       const editResult = await editTool.execute(
         "e1",
-        { path: "pre.ts", edits: [{ range: [existingRef, existingRef], lines: ["prepended", "existing"] }] },
+        { path: "pre.ts", edits: [{ start: existingRef, end: existingRef, lines: ["prepended", "existing"] }] },
         undefined,
         undefined,
         ctx,
@@ -141,7 +141,7 @@ describe("chained edit anchors", () => {
 
       const editResult = await editTool.execute(
         "e1",
-        { path: "sentinel.ts", edits: [{ range: [existingRef, existingRef], lines: ["existing", "appended"] }] },
+        { path: "sentinel.ts", edits: [{ start: existingRef, end: existingRef, lines: ["existing", "appended"] }] },
         undefined,
         undefined,
         ctx,
@@ -150,9 +150,9 @@ describe("chained edit anchors", () => {
       // No empty hashline anchors like "3#09:" should appear
       const anchorLines = editResult.content[0].text
         .split("\n")
-        .filter((line: string) => line.match(/^[+\- ]\s*\d+#\w{2}│.*/));
+        .filter((line: string) => line.match(/^[+\- ]\s*\d+#\w{3}│.*/));
       for (const line of anchorLines) {
-        expect(line).not.toMatch(/^\s*\d+#\w{2}│$/);
+        expect(line).not.toMatch(/^\s*\d+#\w{3}│$/);
       }
     });
   });
@@ -172,7 +172,7 @@ describe("chained edit anchors", () => {
       const newLines = Array.from({ length: 11 }, (_, i) => `EXPANDED ${i + 1}`);
       const editResult = await editTool.execute(
         "e1",
-        { path: "expand.ts", edits: [{ range: [targetRef, targetRef], lines: newLines }] },
+        { path: "expand.ts", edits: [{ start: targetRef, end: targetRef, lines: newLines }] },
         undefined,
         undefined,
         ctx,
@@ -201,7 +201,7 @@ describe("chained edit anchors", () => {
 
       await editTool.execute(
         "e1",
-        { path: "stale.ts", edits: [{ range: [dRef, dRef], lines: ["D"] }] },
+        { path: "stale.ts", edits: [{ start: dRef, end: dRef, lines: ["D"] }] },
         undefined,
         undefined,
         ctx,
@@ -211,7 +211,7 @@ describe("chained edit anchors", () => {
       await expect(
         editTool.execute(
           "e2-stale",
-          { path: "stale.ts", edits: [{ range: [dRef, dRef], lines: ["D-AGAIN"] }] },
+          { path: "stale.ts", edits: [{ start: dRef, end: dRef, lines: ["D-AGAIN"] }] },
           undefined,
           undefined,
           ctx,
@@ -221,7 +221,7 @@ describe("chained edit anchors", () => {
       // Distant line 1 anchor is still valid (neighbors unchanged)
       const aEdit = await editTool.execute(
         "e3",
-        { path: "stale.ts", edits: [{ range: [aRef, aRef], lines: ["A"] }] },
+        { path: "stale.ts", edits: [{ start: aRef, end: aRef, lines: ["A"] }] },
         undefined,
         undefined,
         ctx,

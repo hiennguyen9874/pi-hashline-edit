@@ -105,7 +105,8 @@ describe("classifyFileKind", () => {
   });
 
   it("classifies recognized application/* text-like MIME types as text", async () => {
-    await withTempFile("sample.rtf", "{\\\tf1\\ansi hello}\n", async ({ path }) => {
+    await withTempFile("sample.rtf", "{\\\
+tf1\\ansi hello}\n", async ({ path }) => {
       const result = await loadFileKindAndText(path);
       expect(result.kind).toBe("text");
     });
@@ -295,8 +296,8 @@ describe("file kind guards in tools", () => {
         const text = getText(result);
         expect(text).toContain("<LinearLayout");
         expect(text).not.toMatch(/binary file/i);
-        // Text path renders hashline-prefixed lines (e.g. "1#<hash>:<?xml ...").
-        expect(text).toMatch(/^\s*\d+#[0-9 A-F]{2}│<\?xml/m);
+        // Text path renders hashline-prefixed lines.
+        expect(text).toMatch(/^[A-Za-z0-9_\-]{3}│<\?xml/m);
       },
     );
   });
@@ -392,7 +393,7 @@ describe("file kind guards in tools", () => {
             "e1",
             {
               path: "sample.bin",
-              edits: [{ range: ["1#AB", "1#AB"], lines: ["A"] }],
+              edits: [{ start: "1#AB", end: "1#AB", lines: ["A"] }],
             },
             undefined,
             undefined,

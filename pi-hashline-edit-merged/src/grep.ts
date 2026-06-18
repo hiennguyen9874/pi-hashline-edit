@@ -2,7 +2,7 @@
  * Grep tool with hashline output.
  *
  * Spawns ripgrep with --context to get surrounding lines from JSON events,
- * then formats results with LINE#HASH│ anchors. No file reads needed —
+ * then formats results with hash-only anchors. No file reads needed —
  * all line content comes from rg's JSON output.
  */
 
@@ -17,6 +17,8 @@ import { Text } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { resolveToCwd } from "./path-utils";
 import { normalizeLine, computeHashFromContext } from "./hashline";
+import { formatAnchorPrefix } from "./anchor-display";
+import { ensureHasherReady } from "./hash-format";
 import { stripBom } from "./edit-diff";
 
 // ─── Schema ───────────────────────────────────────────────────────────
@@ -172,6 +174,8 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
     if (!pattern) throw new Error("Pattern is required");
     if (signal?.aborted) throw new Error("Operation aborted");
 
+    await ensureHasherReady();
+
     const rgExe = await getRgPath();
     if (!rgExe) {
       throw new Error("ripgrep (rg) is not available. Install it: https://github.com/BurntSushi/ripgrep");
@@ -310,7 +314,7 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
               const next = lineMap.get(cur + 1)?.text ?? "";
               const hash = computeHashFromContext(prev, lineText, next);
 
-              outputLines.push(`  ${String(cur).padStart(4)}#${hash}│${lineText}`);
+              outputLines.push(`  ${formatAnchorPrefix({ line: cur, hash, lineNumberWidth: 4 })}${lineText}`);
             }
             outputLines.push(""); // blank between blocks
           }

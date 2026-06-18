@@ -125,14 +125,11 @@ describe("fuzzyMatch", () => {
     expect(result.unmatched).toHaveLength(1);
   });
 
-  it("rejects on multiple hash matches", () => {
-    // 4 identical lines — lines 2 and 3 both have neighbors (x, x, x),
-    // so both share the same hash. Within +-1 of line 2, both match.
+  it("resolves repeated content by unique per-file hashes", () => {
     const file = buildHashlineFile("x\nx\nx\nx\n");
-    // Line 2 and 3 share the same hash: fnv(x + "\t" + x + "\t" + x)
     const h2 = file.lineHashes[1]!;
     const h3 = file.lineHashes[2]!;
-    expect(h2).toBe(h3); // same neighbors, same hash
+    expect(h2).not.toBe(h3);
 
     const edit = {
       op: "replace" as const,
@@ -141,8 +138,9 @@ describe("fuzzyMatch", () => {
     };
 
     const result = fuzzyMatch([edit], file);
-    expect(result.matched).toHaveLength(0);
-    expect(result.unmatched).toHaveLength(1);
+    expect(result.matched).toHaveLength(1);
+    expect(result.matched[0]!.pos.line).toBe(2);
+    expect(result.unmatched).toHaveLength(0);
   });
 
   it("handles multi-line ranges", () => {
@@ -226,11 +224,7 @@ describe("fuzzyMatch", () => {
     expect(result.unmatched).toHaveLength(1);
   });
 
-  it("rejects when hash changed (neighbor modified)", () => {
-    // Original: a b c d e
-    // External inserts X between b and c → c's hash changes
-    // Current: a b X c d e
-    // Edit for "c" — old hash no longer exists → unmatched
+  it("relocates when neighbors change but line content remains", () => {
     const original = buildHashlineFile("a\nb\nc\nd\ne\n");
     const current = buildHashlineFile("a\nb\nX\nc\nd\ne\n");
 
@@ -241,14 +235,12 @@ describe("fuzzyMatch", () => {
     };
 
     const result = fuzzyMatch([edit], current);
-    expect(result.matched).toHaveLength(0);
-    expect(result.unmatched).toHaveLength(1);
+    expect(result.matched).toHaveLength(1);
+    expect(result.matched[0]!.pos.line).toBe(4);
+    expect(result.unmatched).toHaveLength(0);
   });
 
-  it("rejects when hash changed (content same, neighbor deleted)", () => {
-    // Original: a b c d e
-    // External deletes c → b's hash changes (neighbor below was c, now d)
-    // Edit for "b" — old hash no longer exists → unmatched
+  it("keeps matching when neighbors change but content stays unique", () => {
     const original = buildHashlineFile("a\nb\nc\nd\ne\n");
     const current = buildHashlineFile("a\nb\nd\ne\n");
 
@@ -259,8 +251,9 @@ describe("fuzzyMatch", () => {
     };
 
     const result = fuzzyMatch([edit], current);
-    expect(result.matched).toHaveLength(0);
-    expect(result.unmatched).toHaveLength(1);
+    expect(result.matched).toHaveLength(1);
+    expect(result.matched[0]!.pos.line).toBe(2);
+    expect(result.unmatched).toHaveLength(0);
   });
 
   it("relocates at exactly the search boundary (±1 for single-line)", () => {

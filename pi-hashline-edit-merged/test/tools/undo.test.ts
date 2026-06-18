@@ -38,7 +38,7 @@ describe("undo tool", () => {
 
       await editTool.execute(
         "e1",
-        { path: "sample.ts", edits: [{ range: [betaRef, betaRef], lines: ["BETA"] }] },
+        { path: "sample.ts", edits: [{ start: betaRef, end: betaRef, lines: ["BETA"] }] },
         undefined,
         undefined,
         ctx,
@@ -75,7 +75,7 @@ describe("undo tool", () => {
 
       await editTool.execute(
         "e1",
-        { path: "sample.ts", edits: [{ range: [alphaRef, alphaRef], lines: ["ALPHA"] }] },
+        { path: "sample.ts", edits: [{ start: alphaRef, end: alphaRef, lines: ["ALPHA"] }] },
         undefined,
         undefined,
         ctx,
@@ -110,7 +110,7 @@ describe("undo tool", () => {
       // Noop edit — identical content
       await editTool.execute(
         "e1",
-        { path: "sample.ts", edits: [{ range: [alphaRef, alphaRef], lines: ["alpha"] }] },
+        { path: "sample.ts", edits: [{ start: alphaRef, end: alphaRef, lines: ["alpha"] }] },
         undefined,
         undefined,
         ctx,
@@ -142,7 +142,7 @@ describe("undo tool", () => {
 
       await editTool.execute(
         "e1",
-        { path: "sample.ts", edits: [{ range: [alphaRef, alphaRef], lines: ["ALPHA"] }] },
+        { path: "sample.ts", edits: [{ start: alphaRef, end: alphaRef, lines: ["ALPHA"] }] },
         undefined,
         undefined,
         ctx,

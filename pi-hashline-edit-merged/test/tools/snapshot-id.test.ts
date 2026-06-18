@@ -34,14 +34,14 @@ describe("snapshotId surface (details-only after W2)", () => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
-      const bRef = `2#${computeLineHash(["alpha", "beta"], 1)}`;
+      const bRef = computeLineHash(["alpha", "beta"], 1);
 
       await editTool.execute(
         "e1",
         {
           path: "sample.txt",
           snapshotId: "v1|fake|0|0",
-          edits: [{ range: [bRef, bRef], lines: ["BETA"] }],
+          edits: [{ start: bRef, end: bRef, lines: ["BETA"] }],
         },
         undefined,
         undefined,
@@ -60,7 +60,7 @@ describe("snapshotId surface (details-only after W2)", () => {
         const { pi, getTool } = makeFakePiRegistry();
         registerCore(pi);
         const editTool = getTool("edit");
-        const fRef = `4#${computeLineHash(["one", "two", "three", "four", "five"], 3)}`;
+        const fRef = computeLineHash(["one", "two", "three", "four", "five"], 3);
 
         // External, unrelated change: line 2 mutated, line 4 still "four".
         await writeFile(path, "one\nTWO!\nthree\nfour\nfive\n", "utf-8");
@@ -71,7 +71,7 @@ describe("snapshotId surface (details-only after W2)", () => {
             path: "sample.txt",
             edits: [
               {
-                range: [fRef, fRef],
+                start: fRef, end: fRef,
                 lines: ["FOUR"],
               },
             ],
@@ -95,7 +95,7 @@ describe("snapshotId surface (details-only after W2)", () => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
-      const bRef = `2#${computeLineHash(["alpha", "beta"], 1)}`;
+      const bRef = computeLineHash(["alpha", "beta"], 1);
 
       const result = await editTool.execute(
         "e1",
@@ -103,7 +103,7 @@ describe("snapshotId surface (details-only after W2)", () => {
           path: "sample.txt",
           edits: [
             {
-              range: [bRef, bRef],
+              start: bRef, end: bRef,
               lines: ["BETA"],
             },
           ],
@@ -139,7 +139,7 @@ describe("snapshotId surface (details-only after W2)", () => {
               path: "sample.txt",
               edits: [
                 {
-                  range: [`2#${computeLineHash(["one", "two", "three"], 1)}`, `2#${computeLineHash(["one", "two", "three"], 1)}`],
+                  start: computeLineHash(["one", "two", "three"], 1), end: computeLineHash(["one", "two", "three"], 1),
                   lines: ["TWO"],
                 },
               ],
@@ -154,7 +154,7 @@ describe("snapshotId surface (details-only after W2)", () => {
 
         expect(errorMessage).toMatch(/^\[E_STALE_ANCHOR\]/);
         expect(errorMessage).toContain(
-          `>>> 2#${computeLineHash(["one", "TWO!", "three"], 1)}│TWO!`,
+          `    ${computeLineHash(["one", "TWO!", "three"], 1)}│TWO!`,
         );
       },
     );
@@ -179,7 +179,7 @@ describe("snapshotId surface (details-only after W2)", () => {
               path: "sample.txt",
               edits: [
                 {
-                  range: [`2#${computeLineHash(["one", "two", "three"], 1)}`, `2#${computeLineHash(["one", "two", "three"], 1)}`],
+                  start: computeLineHash(["one", "two", "three"], 1), end: computeLineHash(["one", "two", "three"], 1),
                   lines: ["TWO"],
                 },
               ],
@@ -195,7 +195,7 @@ describe("snapshotId surface (details-only after W2)", () => {
         expect(errorMessage).toContain("1 stale anchor");
         expect(errorMessage).not.toContain("2 stale anchors");
         expect(errorMessage).toContain(
-          `>>> 2#${computeLineHash(["one", "TWO!", "three"], 1)}│TWO!`,
+          `    ${computeLineHash(["one", "TWO!", "three"], 1)}│TWO!`,
         );
       },
     );

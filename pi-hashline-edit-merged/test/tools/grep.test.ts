@@ -70,8 +70,8 @@ describe("grep tool execution", () => {
 
       const text = (result as any).content[0].text;
       expect(text).toContain("a.ts");
-      expect(text).toContain("#");
       expect(text).toContain("│");
+      expect(text).not.toMatch(/\d+#/);
       expect(text).toContain("export const bar = 42;");
     } finally {
       tmp.cleanup();
@@ -190,7 +190,7 @@ describe("grep tool execution", () => {
 
       const text = (result as any).content[0].text;
       // Extract the hash from the grep output
-      const hashMatch = text.match(/([0-9A-F]{2})│alpha/);
+      const hashMatch = text.match(/([A-Za-z0-9_\-]{3})│alpha/);
       expect(hashMatch).not.toBeNull();
       const grepHash = hashMatch![1];
 
@@ -215,7 +215,7 @@ describe("grep tool execution", () => {
       );
 
       const text = (result as any).content[0].text;
-      const hashMatch = text.match(/([0-9A-F]{2})│alpha/);
+      const hashMatch = text.match(/([A-Za-z0-9_\-]{3})│alpha/);
       expect(hashMatch).not.toBeNull();
       const grepHash = hashMatch![1];
 
@@ -239,7 +239,7 @@ describe("grep tool execution", () => {
       );
 
       const text = (result as any).content[0].text;
-      const hashMatch = text.match(/([0-9A-F]{2})│hello/);
+      const hashMatch = text.match(/([A-Za-z0-9_\-]{3})│hello/);
       expect(hashMatch).not.toBeNull();
       const grepHash = hashMatch![1];
 
@@ -251,7 +251,7 @@ describe("grep tool execution", () => {
     }
   });
 
-  it.skipIf(!rgAvailable)("accepts anchors from grep in a subsequent edit", async () => {
+  it.skipIf(!rgAvailable)("grep anchors match read anchors for subsequent edits", async () => {
     const tmp = tempDir();
     try {
       tmp.add("src.ts", "import { bar } from './bar';\nimport { foo } from './foo';\n\nconst x = foo();\n");
@@ -264,10 +264,9 @@ describe("grep tool execution", () => {
       );
       const grepText = (grepResult as any).content[0].text;
 
-      // Extract a LINE#HASH anchor for the first import line
-      const anchorMatch = grepText.match(/\s+(\d+)#([0-9A-F]{2})│import/);
+      const anchorMatch = grepText.match(/\s+([A-Za-z0-9_\-]{3})│import/);
       expect(anchorMatch).not.toBeNull();
-      const anchor = `${anchorMatch![1]}#${anchorMatch![2]}`;
+      const anchor = anchorMatch![1];
 
       // Use read to verify the anchor is valid
       const { pi, getTool } = makeFakePiRegistry();
@@ -281,7 +280,6 @@ describe("grep tool execution", () => {
         undefined, undefined, ctx,
       );
 
-      // The same anchor should appear in read output
       expect(readResult.content[0].text).toContain(`${anchor}│import`);
     } finally {
       tmp.cleanup();

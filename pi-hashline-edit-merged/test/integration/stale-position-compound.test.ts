@@ -30,7 +30,7 @@ function applyHashlineEdits(content: string, edits: HashlineEdit[]) {
     const retryLines = new Set(mismatches.map((m) => m.line));
     throw new Error(formatMismatchError(mismatches, file.lines, retryLines));
   }
-  const spanResult = resolveEditSpans(file, edits);
+  const spanResult = resolveEditSpans(file, exact.matched);
   if (!spanResult.ok) throw new Error(spanResult.message);
   const applied = applySpans(file, spanResult.spans);
   return {
@@ -60,12 +60,12 @@ describe("stale-position compound edits", () => {
     const toolEdits: HashlineToolEdit[] = [
       {
         op: "replace",
-        pos: `5#${line5Hash}`,
+        pos: line5Hash,
         lines: ["NEW_LINE_5"],
       },
       {
         op: "replace",
-        pos: `1#${line1Hash}`,
+        pos: line1Hash,
         lines: ["header-1", "header-2", "header-3", "line1"],
       },
     ];

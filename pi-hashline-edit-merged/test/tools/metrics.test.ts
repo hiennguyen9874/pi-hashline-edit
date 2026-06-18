@@ -38,7 +38,7 @@ describe("details.metrics surface (Phase 2 C — host-only observability)", () =
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
-      const bRef = `2#${computeLineHash(["alpha", "beta", "gamma"], 1)}`;
+      const bRef = computeLineHash(["alpha", "beta", "gamma"], 1);
 
       const result = await editTool.execute(
         "e1",
@@ -46,7 +46,7 @@ describe("details.metrics surface (Phase 2 C — host-only observability)", () =
           path: "a.txt",
           edits: [
             {
-              range: [bRef, bRef],
+              start: bRef, end: bRef,
               lines: ["BETA"],
             },
           ],
@@ -72,7 +72,7 @@ describe("details.metrics surface (Phase 2 C — host-only observability)", () =
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
-      const bRef = `2#${computeLineHash(["alpha", "beta"], 1)}`;
+      const bRef = computeLineHash(["alpha", "beta"], 1);
 
       const result = await editTool.execute(
         "e1",
@@ -80,7 +80,7 @@ describe("details.metrics surface (Phase 2 C — host-only observability)", () =
           path: "b.txt",
           edits: [
             {
-              range: [bRef, bRef],
+              start: bRef, end: bRef,
               lines: ["beta"],
             },
           ],
@@ -104,7 +104,7 @@ describe("details.metrics surface (Phase 2 C — host-only observability)", () =
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
       const editTool = getTool("edit");
-      const bRef = `2#${computeLineHash(["alpha", "beta"], 1)}`;
+      const bRef = computeLineHash(["alpha", "beta"], 1);
 
       const result = await editTool.execute(
         "e1",
@@ -112,7 +112,7 @@ describe("details.metrics surface (Phase 2 C — host-only observability)", () =
           path: "e.txt",
           edits: [
             {
-              range: [bRef, bRef],
+              start: bRef, end: bRef,
               lines: ["beta"],
             },
           ],

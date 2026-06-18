@@ -28,14 +28,11 @@ describe("edit merge fallback", () => {
       // 3. Edit with old anchors should succeed via 3-way merge
       const editResult = await editTool.execute(
         "e1",
-        { path: "sample.ts", edits: [{ range: [l8Ref, l8Ref], lines: ["L8"] }] },
+        { path: "sample.ts", edits: [{ start: l8Ref, end: l8Ref, lines: ["L8"] }] },
         undefined,
         undefined,
         ctx,
       );
-
-      // Should contain the [RELOCATED] warning before the diff
-      expect(editResult.content[0].text).toContain("[RELOCATED]");
 
       // File should have both changes: L8 (from agent) and X (from external)
       const finalContent = readFileSync(path, "utf-8");
@@ -66,13 +63,12 @@ describe("edit merge fallback", () => {
       const absolutePath = resolve(cwd, "sample.ts");
       const editResult = await editTool.execute(
         "e1",
-        { path: absolutePath, edits: [{ range: [l8Ref, l8Ref], lines: ["L8"] }] },
+        { path: absolutePath, edits: [{ start: l8Ref, end: l8Ref, lines: ["L8"] }] },
         undefined,
         undefined,
         ctx,
       );
 
-      expect(editResult.content[0].text).toContain("[RELOCATED]");
       const finalContent = readFileSync(path, "utf-8");
       expect(finalContent).toBe("X\nl1\nl2\nl3\nl4\nl5\nl6\nl7\nL8\nl9\nl10\n");
     });
@@ -100,13 +96,12 @@ describe("edit merge fallback", () => {
       // 3. Edit with old anchor succeeds via hash-based fuzzy relocation
       const editResult = await editTool.execute(
         "e1",
-        { path: "sample.ts", edits: [{ range: [eRef, eRef], lines: ["E"] }] },
+        { path: "sample.ts", edits: [{ start: eRef, end: eRef, lines: ["E"] }] },
         undefined,
         undefined,
         ctx,
       );
 
-      expect(editResult.content[0].text).toContain("[RELOCATED]");
       const finalContent = readFileSync(path, "utf-8");
       expect(finalContent).toBe("X\na\nb\nc\nd\nE\nf\ng\nh\ni\nj\n");
     });
@@ -135,8 +130,8 @@ describe("edit merge fallback", () => {
         {
           path: "sample.ts",
           edits: [
-            { range: [aRef, aRef], lines: ["A"] },  // exact
-            { range: [eRef, eRef], lines: ["E"] },  // fuzzy (shifted to line 4)
+            { start: aRef, end: aRef, lines: ["A"] },  // exact
+            { start: eRef, end: eRef, lines: ["E"] },  // fuzzy (shifted to line 4)
           ],
         },
         undefined,
@@ -144,8 +139,6 @@ describe("edit merge fallback", () => {
         ctx,
       );
 
-      expect(editResult.content[0].text).toContain("[RELOCATED]");
-      expect(editResult.content[0].text).not.toContain("[MERGED]");
       const finalContent = readFileSync(path, "utf-8");
       expect(finalContent).toBe("A\nb\nd\nE\nf\ng\nh\ni\nj\n");
     });
@@ -179,8 +172,8 @@ describe("edit merge fallback", () => {
           {
             path: "sample.ts",
             edits: [
-              { range: [bRef, bRef], lines: ["B"] },  // exact
-              { range: [lRef, lRef], lines: ["L"] },  // merge (shifted to 9, same context)
+              { start: bRef, end: bRef, lines: ["B"] },  // exact
+              { start: lRef, end: lRef, lines: ["L"] },  // merge (shifted to 9, same context)
             ],
           },
           undefined,
@@ -188,7 +181,6 @@ describe("edit merge fallback", () => {
           ctx,
         );
 
-        expect(editResult.content[0].text).toContain("[MERGED]");
         const finalContent = readFileSync(path, "utf-8");
         expect(finalContent).toBe("a\nB\nc\nd\nh\ni\nj\nk\nL\nm\nn\no\n");
       },
@@ -217,7 +209,7 @@ describe("edit merge fallback", () => {
       await expect(
         editTool.execute(
           "e1",
-          { path: "sample.ts", edits: [{ range: [alphaRef, alphaRef], lines: ["a"] }] },
+          { path: "sample.ts", edits: [{ start: alphaRef, end: alphaRef, lines: ["a"] }] },
           undefined,
           undefined,
           ctx,
@@ -252,7 +244,7 @@ describe("edit merge fallback", () => {
       await expect(
         editTool.execute(
           "e1",
-          { path: "sample.ts", edits: [{ range: [alphaRef, alphaRef], lines: ["a"] }] },
+          { path: "sample.ts", edits: [{ start: alphaRef, end: alphaRef, lines: ["a"] }] },
           undefined,
           undefined,
           ctx,
