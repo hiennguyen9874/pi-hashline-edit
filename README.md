@@ -1,5 +1,3 @@
-![pi-hashline-edit](assets/banner.jpeg)
-
 # pi-hashline-edit-merged
 
 Focused merged hashline editor for pi with split tools, atomic writes, stale-anchor safety, and 3-character perfect anchors.
