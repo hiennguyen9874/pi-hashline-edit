@@ -1,0 +1,53 @@
+{
+  "name": "@jerryan/pi-hashline-edit",
+  "version": "0.11.3",
+  "description": "Fork of pi-hashline-edit with trimmed schema, unified diff, and extra safety guardrails.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JerryAZR/pi-hashline-edit.git"
+  },
+  "author": "JerryAZR",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "extension",
+    "hashline"
+  ],
+  "license": "MIT",
+  "files": [
+    "extensions",
+    "src",
+    "tool-descriptions",
+    "README.md",
+    "LICENSE"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  },
+  "dependencies": {
+    "diff": "^8.0.2",
+    "file-type": "^21.3.4"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": ">=0.74.0",
+    "@earendil-works/pi-coding-agent": ">=0.74.0",
+    "@earendil-works/pi-tui": "*",
+    "@sinclair/typebox": "*"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.74.0",
+    "@types/node": "^22.0.0",
+    "ajv": "^8.20.0",
+    "vitest": "^3.0.0"
+  }
+}
