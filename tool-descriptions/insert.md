@@ -1,6 +1,8 @@
 Patch a text file by inserting new lines between existing ones. This tool
 does NOT change or delete any existing lines — it only adds new content.
 
+Submit one `insert` call per file. Put all insertions for that file in `edits`.
+
 Each entry is an insertion operation:
 - `anchor`: a 3-character hash anchor copied from read output. In `LINE#HASH│content`, copy only `HASH`; do not include line numbers, #, │, or content.
 - `direction`: `"after"` to insert after the anchor line, or `"before"` to insert before it.

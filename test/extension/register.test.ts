@@ -49,13 +49,22 @@ describe("extension registration", () => {
       "Use insert when only adding lines; use edit when replacing or deleting existing lines.",
     );
     expect(readTool?.promptGuidelines).toContain(
-      "If an edit or insert result shows fresh anchors for the line you need, reuse those anchors for follow-up edits instead of calling read again.",
+      "If an edit or insert result shows fresh anchors as `HASH│content`, copy only HASH before `│` for follow-up edits instead of calling read again.",
     );
     expect(readTool?.promptGuidelines).toContain(
       "For simple file creation requests, write only the requested content unless the user asks for structure.",
     );
     expect(readTool?.promptGuidelines).toContain(
       "Preserve user-provided spelling and wording unless correction is explicitly requested.",
+    );
+  });
+
+  it("edit schema requires edits by default", () => {
+    const editTool = collectToolDefinitions(registerCore).find((tool) => tool.name === "edit");
+
+    expect(editTool?.parameters.required).toEqual(["path", "edits"]);
+    expect(editTool?.parameters.properties.path.description).toBe(
+      "Path to the UTF-8 text file to patch, relative or absolute.",
     );
   });
 
@@ -68,6 +77,17 @@ describe("extension registration", () => {
 
     expect(insertTool?.promptSnippet).toContain("insert: Insert new lines");
     expect(insertTool?.promptSnippet).toContain("Use when you only need to add content.");
+  });
+
+  it("insert description encourages one call per file", () => {
+    const insertTool = collectToolDefinitions(registerInsert).find((tool) => tool.name === "insert");
+
+    expect(insertTool?.description).toContain(
+      "Submit one `insert` call per file. Put all insertions for that file in `edits`.",
+    );
+    expect(insertTool?.parameters.properties.path.description).toBe(
+      "Path to the UTF-8 text file to patch, relative or absolute.",
+    );
   });
 
   it("undo remains available as an optional extension", () => {
