@@ -43,39 +43,19 @@ const editEntrySchema = Type.Object(
   },
   { additionalProperties: false },
 );
-const anchoredEditRequestSchema = Type.Object(
+export const hashlineEditToolSchema = Type.Object(
   {
     path: Type.String({ description: "path" }),
-    edits: Type.Array(editEntrySchema, {
+    edits: Type.Optional(Type.Array(editEntrySchema, {
       description: "Edits to apply to $path. Copy only the 3-character hash before │. Do not include line numbers, #, │, or content.",
-    }),
+    })),
+    oldText: Type.Optional(Type.String({ description: "Exact unique text to replace. Compatibility only; hash anchors are preferred." })),
+    newText: Type.Optional(Type.String({ description: "Replacement text. Compatibility only; hash anchors are preferred." })),
+    old_text: Type.Optional(Type.String({ description: "Exact unique text to replace. Compatibility only; hash anchors are preferred." })),
+    new_text: Type.Optional(Type.String({ description: "Replacement text. Compatibility only; hash anchors are preferred." })),
   },
   { additionalProperties: false },
 );
-
-const legacyCamelEditRequestSchema = Type.Object(
-  {
-    path: Type.String({ description: "path" }),
-    oldText: Type.String({ description: "Exact unique text to replace. Compatibility only; hash anchors are preferred." }),
-    newText: Type.String({ description: "Replacement text. Compatibility only; hash anchors are preferred." }),
-  },
-  { additionalProperties: false },
-);
-
-const legacySnakeEditRequestSchema = Type.Object(
-  {
-    path: Type.String({ description: "path" }),
-    old_text: Type.String({ description: "Exact unique text to replace. Compatibility only; hash anchors are preferred." }),
-    new_text: Type.String({ description: "Replacement text. Compatibility only; hash anchors are preferred." }),
-  },
-  { additionalProperties: false },
-);
-
-export const hashlineEditToolSchema = Type.Union([
-  anchoredEditRequestSchema,
-  legacyCamelEditRequestSchema,
-  legacySnakeEditRequestSchema,
-]);
 
 
 type EditRequestParams = {

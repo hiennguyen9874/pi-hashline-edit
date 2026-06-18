@@ -33,6 +33,10 @@ describe("assertEditRequest", () => {
 });
 
 describe("registerEditTool", () => {
+  it("publishes a DeepSeek-compatible top-level object schema", () => {
+    expect(hashlineEditToolSchema.type).toBe("object");
+  });
+
   it("publishes a schema that validates hash-only payloads", () => {
     const ajv = new Ajv({ allErrors: true });
     const validate = ajv.compile(hashlineEditToolSchema as any);
