@@ -33,6 +33,9 @@ const insertEntrySchema = Type.Object(
       minItems: 1,
       description: "Lines to insert.",
     }),
+    current: Type.Optional(Type.String({
+      description: "Optional exact current text of the anchor line; rejects the insert if the live anchor line differs.",
+    })),
   },
   { additionalProperties: false },
 );
@@ -103,7 +106,7 @@ export function assertInsertRequest(request: unknown): asserts request is Insert
   if (!Array.isArray(request.edits) || request.edits.length === 0) {
     throw new Error('Insert request requires a non-empty "edits" array.');
   }
-  const editKeys = new Set(["anchor", "direction", "lines"]);
+  const editKeys = new Set(["anchor", "direction", "lines", "current"]);
   for (const [index, edit] of request.edits.entries()) {
     if (!isRecord(edit)) {
       throw new Error(`Insert ${index + 1} must be an object.`);
@@ -122,6 +125,9 @@ export function assertInsertRequest(request: unknown): asserts request is Insert
     if (!Array.isArray(edit.lines) || edit.lines.length === 0 || !edit.lines.every((line) => typeof line === "string")) {
       throw new Error(`Insert ${index + 1} requires non-empty "lines" array of strings.`);
     }
+    if (edit.current !== undefined && typeof edit.current !== "string") {
+      throw new Error(`Insert ${index + 1} optional "current" must be a string.`);
+    }
   }
 }
 
@@ -130,7 +136,12 @@ function normalizeInsertItems(edits: Record<string, unknown>[]): HashlineToolEdi
     const anchor = edit.anchor as string;
     const direction = edit.direction as string;
     const op = direction === "before" ? "prepend" as const : "append" as const;
-    return { op, pos: anchor, lines: edit.lines as string[] };
+    return {
+      op,
+      pos: anchor,
+      lines: edit.lines as string[],
+      ...(edit.current !== undefined ? { current: edit.current as string } : {}),
+    };
   });
 }
 

@@ -24,6 +24,15 @@ describe("assertInsertRequest", () => {
     ).not.toThrow();
   });
 
+  it("accepts optional current guard", () => {
+    expect(() =>
+      assertInsertRequest({
+        path: "a.ts",
+        edits: [{ anchor: "abc", direction: "after", current: "anchor line", lines: ["x"] }],
+      }),
+    ).not.toThrow();
+  });
+
   it("rejects missing path", () => {
     expect(() =>
       assertInsertRequest({ edits: [{ anchor: "abc", direction: "after", lines: ["x"] }] }),
@@ -40,6 +49,12 @@ describe("assertInsertRequest", () => {
     expect(() =>
       assertInsertRequest({ path: "a.ts", edits: [{ anchor: "abc", direction: "after", lines: [] }] }),
     ).toThrow('Insert 1 requires non-empty "lines" array of strings.');
+  });
+
+  it("rejects non-string current guard", () => {
+    expect(() =>
+      assertInsertRequest({ path: "a.ts", edits: [{ anchor: "abc", direction: "after", current: 123, lines: ["x"] }] }),
+    ).toThrow('Insert 1 optional "current" must be a string.');
   });
 });
 
@@ -87,6 +102,17 @@ describe("insertToolSchema", () => {
       }),
     ).toBe(false);
   });
+
+  it("accepts optional current", () => {
+    const ajv = new Ajv({ allErrors: true });
+    const validate = ajv.compile(insertToolSchema as any);
+    expect(
+      validate({
+        path: "a.ts",
+        edits: [{ anchor: "abc", direction: "after", current: "anchor line", lines: ["x"] }],
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("insert tool execution", () => {
@@ -112,6 +138,58 @@ describe("insert tool execution", () => {
       );
 
       expect(await readFile(path, "utf-8")).toBe("aaa\nbbb\nccc\n");
+    });
+  });
+
+  it("inserts with matching current guard", async () => {
+    await withTempFile("sample.txt", "aaa\nccc\n", async ({ cwd, path }) => {
+      const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
+      registerInsert(pi);
+      const readTool = getTool("read");
+      const insertTool = getTool("insert");
+      const ctx = { cwd, ui: { notify() {} } } as any;
+
+      const readResult = await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
+      const aaaAnchor = readResult.content[0].text
+        .split("\n")
+        .find((line: string) => line.includes("│aaa"))!
+        .split("│")[0]!;
+
+      await insertTool.execute(
+        "i1",
+        { path: "sample.txt", edits: [{ anchor: aaaAnchor, direction: "after", current: "aaa", lines: ["bbb"] }] },
+        undefined, undefined, ctx,
+      );
+
+      expect(await readFile(path, "utf-8")).toBe("aaa\nbbb\nccc\n");
+    });
+  });
+
+  it("rejects mismatched current guard without mutating", async () => {
+    await withTempFile("sample.txt", "aaa\nccc\n", async ({ cwd, path }) => {
+      const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
+      registerInsert(pi);
+      const readTool = getTool("read");
+      const insertTool = getTool("insert");
+      const ctx = { cwd, ui: { notify() {} } } as any;
+
+      const readResult = await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, ctx);
+      const aaaAnchor = readResult.content[0].text
+        .split("\n")
+        .find((line: string) => line.includes("│aaa"))!
+        .split("│")[0]!;
+
+      await expect(
+        insertTool.execute(
+          "i1",
+          { path: "sample.txt", edits: [{ anchor: aaaAnchor, direction: "after", current: "AAA", lines: ["bbb"] }] },
+          undefined, undefined, ctx,
+        ),
+      ).rejects.toThrow(/E_CURRENT_MISMATCH/);
+
+      expect(await readFile(path, "utf-8")).toBe("aaa\nccc\n");
     });
   });
 
