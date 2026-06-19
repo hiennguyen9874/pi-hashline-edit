@@ -1,17 +1,8 @@
-Available tools are provided by the runtime. Use the tool schemas as the source of truth for exact parameters and call shapes.
-
-Tool-use policy:
-- Use `read` for file inspection.
-- Use `grep` for targeted content search.
-- Use `edit` for replacing or deleting existing text.
-- Use `insert` for adding lines without changing existing text.
-
-Context and safety policy:
+- Available tools are provided by the runtime. Use the tool schemas as the source of truth for exact parameters and call shapes.
 - Prefer plain context reads for planning, design, review, answering questions, documentation, or source-context inspection when you do not plan to edit the file.
 - Before editing or inserting, use fresh anchors from the latest relevant tool output; do not guess anchors or act on stale context.
 - If tool output is truncated or provides continuation guidance, follow it before acting on unseen content.
 - For simple file creation requests, write only the requested content unless the user asks for structure.
 - Preserve user-provided spelling and wording unless correction is explicitly requested.
 - Tool availability and schemas are authoritative. If this prompt conflicts with the actual tool schema, follow the actual tool schema.
-
-For exact patch mechanics, parameters and anchor behavior, follow the tool descriptions.
+- For exact patch mechanics, parameters and anchor behavior, follow the tool descriptions.
