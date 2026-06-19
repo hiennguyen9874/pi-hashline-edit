@@ -14,4 +14,4 @@ Context and safety policy:
 - Preserve user-provided spelling and wording unless correction is explicitly requested.
 - Tool availability and schemas are authoritative. If this prompt conflicts with the actual tool schema, follow the actual tool schema.
 
-For exact patch mechanics, follow the tool descriptions.
+For exact patch mechanics, parameters and anchor behavior, follow the tool descriptions.
