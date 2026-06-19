@@ -40,7 +40,7 @@ const insertEntrySchema = Type.Object(
 export const insertToolSchema = Type.Object(
   {
     path: Type.String({
-      description: "Path to the UTF-8 text file to patch, relative or absolute.",
+      description: "Path to the UTF-8 text file to patch (relative or absolute)",
     }),
     edits: Type.Array(insertEntrySchema, {
       description: "Insert operations to apply.",

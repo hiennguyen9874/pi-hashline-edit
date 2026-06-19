@@ -41,11 +41,14 @@ describe("extension registration", () => {
     expect(collectTools(registerCore).sort()).toEqual(["edit", "read"]);
   });
 
-  it("read prompt guidelines encourage fresh-anchor reuse and minimal writes", () => {
+  it("read prompt guidelines encourage raw context reads, fresh-anchor reuse, and minimal writes", () => {
     const readTool = collectToolDefinitions(registerCore).find((tool) => tool.name === "read");
 
     expect(readTool?.promptGuidelines).toContain(
-      "Use read before edit or insert when you do not have current 3-character hash anchors for the file.",
+      "Use `raw: true` for planning, design, review, answering questions, documentation, or source-context reads when you do not plan to edit the file.",
+    );
+    expect(readTool?.promptGuidelines).toContain(
+      "Use read without `raw` before edit or insert when you do not have current 3-character hash anchors for the file.",
     );
     expect(readTool?.promptGuidelines).toContain(
       "Use insert when only adding lines; use edit when replacing or deleting existing lines.",

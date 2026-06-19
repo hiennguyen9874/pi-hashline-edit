@@ -44,7 +44,7 @@ const editEntrySchema = Type.Object(
   { additionalProperties: false },
 );
 const hashlineEditPathSchema = Type.String({
-  description: "Path to the UTF-8 text file to patch, relative or absolute.",
+  description: "Path to the UTF-8 text file to patch (relative or absolute)",
 });
 const hashlineEditEditsSchema = Type.Array(editEntrySchema, {
   description: "Edits to apply to $path. In LINE#HASH│content, copy only HASH. Do not include line numbers, #, │, or content.",
