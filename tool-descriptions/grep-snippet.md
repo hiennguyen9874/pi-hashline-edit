@@ -1,1 +1,1 @@
-Search file contents. Respects .gitignore. Returns optional-tool display context as `aB3│matching line`. Copy only the 3-character hash before `│` into `edit.start`, `edit.end`, or `insert.anchor`; do not include line numbers, `#`, `│`, or content. `grep` is disabled by default; enable `extensions/grep.ts` explicitly.
+Search file contents. Respects .gitignore. Returns display context as `aB3│matching line`. Copy only the 3-character hash before `│` into `edit.start`, `edit.end`, or `insert.anchor`; do not include line numbers, `#`, `│`, or content.

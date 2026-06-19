@@ -28,7 +28,8 @@
   "pi": {
     "extensions": [
       "./extensions/core.ts",
-      "./extensions/insert.ts"
+      "./extensions/insert.ts",
+      "./extensions/grep.ts"
     ]
   },
   "dependencies": {

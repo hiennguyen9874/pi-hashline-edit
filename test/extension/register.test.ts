@@ -28,10 +28,11 @@ function collectTools(register: (pi: any) => void): string[] {
 }
 
 describe("extension registration", () => {
-  it("package defaults enable only core and insert extensions", () => {
+  it("package defaults enable core, insert, and grep extensions", () => {
     expect(packageJson.pi.extensions).toEqual([
       "./extensions/core.ts",
       "./extensions/insert.ts",
+      "./extensions/grep.ts",
     ]);
   });
 

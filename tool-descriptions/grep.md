@@ -6,7 +6,7 @@ aB3│matching line
 
 Use the 3-character hash before `│` directly in `edit.start`, `edit.end`, or `insert.anchor`. Do not include line numbers, `#`, `│`, or content.
 
-`grep` is optional and disabled by default in package metadata; enable `extensions/grep.ts` explicitly. Respects .gitignore by default.
+`grep` is enabled by default in package metadata. Respects .gitignore by default.
 
 **Parameters:**
 - `pattern` (required) — regex or literal search pattern

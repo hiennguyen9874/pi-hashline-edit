@@ -9,9 +9,9 @@ Every text line returned by `read` is prefixed with a compact hash anchor. Mutat
 Default loaded extensions:
 - `extensions/core.ts` (`read`, `edit`)
 - `extensions/insert.ts` (`insert`)
+- `extensions/grep.ts` (`grep`)
 
 Optional disabled-by-default extensions:
-- `extensions/grep.ts`
 - `extensions/undo.ts`
 
 Enable optional extensions explicitly:
