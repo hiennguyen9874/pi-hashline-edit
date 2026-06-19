@@ -1,8 +1,16 @@
-- Use `raw: true` for planning, design, review, answering questions, documentation, or source-context reads when you do not plan to edit the file.
-- Use read without `raw` before edit or insert when you do not have current 3-character hash anchors for the file.
-- In `LINE#HASH│content` read output, use LINE for `offset`/`limit` and copy only HASH into edit or insert anchors.
-- Use insert when only adding lines; use edit when replacing or deleting existing lines.
-- If an edit or insert result shows fresh anchors as `HASH│content`, copy only HASH before `│` for follow-up edits instead of calling read again.
-- If read is truncated, continue with the `offset` it suggests — do not guess unseen lines.
+Available tools are provided by the runtime. Use the tool schemas as the source of truth for exact parameters and call shapes.
+
+Tool-use policy:
+- Use `read` for file inspection.
+- Use `grep` for targeted content search.
+- Use `edit` for replacing or deleting existing text.
+- Use `insert` for adding lines without changing existing text.
+
+Context and safety policy:
+- Prefer plain context reads for planning, design, review, answering questions, documentation, or source-context inspection when you do not plan to edit the file.
+- Before editing or inserting, use fresh anchors from the latest relevant tool output; do not guess anchors or act on stale context.
+- If tool output is truncated or provides continuation guidance, follow it before acting on unseen content.
 - For simple file creation requests, write only the requested content unless the user asks for structure.
 - Preserve user-provided spelling and wording unless correction is explicitly requested.
+
+For exact patch mechanics, follow the tool descriptions.

@@ -1,1 +1,1 @@
-Replace/delete text. Shape: {"path":"...","edits":[{"start":"HASH","end":"HASH","lines":[...]}]}. Put path only at top level. In LINE#HASH│content, copy only HASH.
+Replace or delete existing text. Use for changing existing lines; follow the schema and tool description for exact patch mechanics.

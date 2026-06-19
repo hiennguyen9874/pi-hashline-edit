@@ -1,1 +1,1 @@
-Read source/context with raw:true unless editing; omit raw to get LINE#HASH│content anchors for edit/insert
+Inspect files and supported images. Use for file inspection; follow the schema and tool description for exact parameters.

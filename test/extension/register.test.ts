@@ -40,26 +40,24 @@ describe("extension registration", () => {
     expect(collectTools(registerCore).sort()).toEqual(["edit", "read"]);
   });
 
-  it("read prompt guidelines encourage raw context reads, fresh-anchor reuse, and minimal writes", () => {
+  it("read prompt guidelines provide policy-level tool guidance", () => {
     const readTool = collectToolDefinitions(registerCore).find((tool) => tool.name === "read");
 
     expect(readTool?.promptGuidelines).toContain(
-      "Use `raw: true` for planning, design, review, answering questions, documentation, or source-context reads when you do not plan to edit the file.",
+      "Use the tool schemas as the source of truth for exact parameters and call shapes.",
+    );
+    expect(readTool?.promptGuidelines).toContain("Use `read` for file inspection.");
+    expect(readTool?.promptGuidelines).toContain(
+      "Use `edit` for replacing or deleting existing text.",
     );
     expect(readTool?.promptGuidelines).toContain(
-      "Use read without `raw` before edit or insert when you do not have current 3-character hash anchors for the file.",
-    );
-    expect(readTool?.promptGuidelines).toContain(
-      "Use insert when only adding lines; use edit when replacing or deleting existing lines.",
-    );
-    expect(readTool?.promptGuidelines).toContain(
-      "If an edit or insert result shows fresh anchors as `HASH│content`, copy only HASH before `│` for follow-up edits instead of calling read again.",
-    );
-    expect(readTool?.promptGuidelines).toContain(
-      "For simple file creation requests, write only the requested content unless the user asks for structure.",
+      "Before editing or inserting, use fresh anchors from the latest relevant tool output; do not guess anchors or act on stale context.",
     );
     expect(readTool?.promptGuidelines).toContain(
       "Preserve user-provided spelling and wording unless correction is explicitly requested.",
+    );
+    expect(readTool?.promptGuidelines).toContain(
+      "For exact patch mechanics, follow the tool descriptions.",
     );
   });
 
@@ -76,11 +74,13 @@ describe("extension registration", () => {
     expect(collectTools(registerInsert).sort()).toEqual(["insert"]);
   });
 
-  it("insert contributes a prompt snippet", () => {
+  it("insert contributes a behavior-level prompt snippet", () => {
     const insertTool = collectToolDefinitions(registerInsert).find((tool) => tool.name === "insert");
 
-    expect(insertTool?.promptSnippet).toContain("insert: Insert new lines");
-    expect(insertTool?.promptSnippet).toContain("Use when you only need to add content.");
+    expect(insertTool?.promptSnippet).toContain(
+      "insert: Add new lines without changing existing text.",
+    );
+    expect(insertTool?.promptSnippet).toContain("follow the schema and tool description");
   });
 
   it("insert description encourages one call per file", () => {

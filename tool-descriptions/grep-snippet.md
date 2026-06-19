@@ -1,1 +1,1 @@
-Search file contents. Respects .gitignore. Returns display context as `aB3│matching line`. Copy only the 3-character hash before `│` into `edit.start`, `edit.end`, or `insert.anchor`; do not include line numbers, `#`, `│`, or content.
+Search file contents. Use for targeted content search; follow the schema and tool description for exact parameters and anchor behavior.
