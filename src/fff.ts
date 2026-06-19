@@ -30,6 +30,7 @@ type FffFinder = {
   grep(query: string, options: Record<string, unknown>): FffResult<FffGrepResult>;
   healthCheck?: () => FffResult<Record<string, unknown>>;
   getScanProgress?: () => FffResult<Record<string, unknown>>;
+  scanFiles?: () => FffResult<unknown>;
 };
 
 type FffResult<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -368,6 +369,29 @@ export function registerFffTools(pi: ExtensionAPI): void {
 
   pi.on?.("session_shutdown", async () => {
     destroyFinder();
+  });
+
+  pi.registerCommand?.("fff-rescan", {
+    description: "Trigger FFF to rescan files",
+    handler: async (_args, ctx) => {
+      if (!finder || finder.isDestroyed) {
+        ctx.ui.notify("FFF not initialized", "warning");
+        return;
+      }
+
+      if (!finder.scanFiles) {
+        ctx.ui.notify("FFF rescan is not supported by this @ff-labs/fff-node version", "warning");
+        return;
+      }
+
+      const result = finder.scanFiles();
+      if (!result.ok) {
+        ctx.ui.notify(`Rescan failed: ${result.error}`, "error");
+        return;
+      }
+
+      ctx.ui.notify("FFF rescan triggered", "info");
+    },
   });
 
   const grepSchema = Type.Object({
