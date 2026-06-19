@@ -80,7 +80,9 @@ describe("fuzzyMatch", () => {
     expect(result.matched[0]!.pos.line).toBe(4);
     expect(result.matched[0]!.pos.hash).toBe(original.lineHashes[2]); // unchanged
     expect(result.unmatched).toHaveLength(0);
-    expect(result.warnings).toContain("[RELOCATED] 1 range(s) relocated via hash matching. Please review the diff carefully.");
+    expect(result.warnings[0]).toContain("[RELOCATED] 1 range(s) relocated via hash matching:");
+    expect(result.warnings[0]).toContain(`${original.lineHashes[2]}: line 3 -> 4`);
+    expect(result.warnings[0]).toContain("Please review the diff carefully.");
   });
 
   it("leaves absent hashes unmatched for snapshot merge", () => {
@@ -315,7 +317,10 @@ describe("fuzzyMatch", () => {
     expect(result.matched[1]!.pos.line).toBe(5);
     expect(result.matched[2]!.pos.line).toBe(7);
     expect(result.unmatched).toHaveLength(0);
-    expect(result.warnings).toContain("[RELOCATED] 3 range(s) relocated via hash matching. Please review the diff carefully.");
+    expect(result.warnings[0]).toContain("[RELOCATED] 3 range(s) relocated via hash matching:");
+    expect(result.warnings[0]).toContain(`${original.lineHashes[1]}: line 2 -> 3`);
+    expect(result.warnings[0]).toContain(`${original.lineHashes[3]}: line 4 -> 5`);
+    expect(result.warnings[0]).toContain(`${original.lineHashes[5]}: line 6 -> 7`);
   });
 
   it("handles append/prepend (single anchor, no end)", () => {

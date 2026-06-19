@@ -13,6 +13,35 @@ export interface MatchResult {
   warnings: string[];
 }
 
+type Relocation = {
+  startHash: string;
+  endHash?: string;
+  oldStart: number;
+  newStart: number;
+  oldEnd?: number;
+  newEnd?: number;
+};
+
+function formatRelocation(relocation: Relocation): string {
+  if (relocation.endHash && relocation.oldEnd !== undefined && relocation.newEnd !== undefined) {
+    return `  ${relocation.startHash}-${relocation.endHash}: lines ${relocation.oldStart}-${relocation.oldEnd} -> ${relocation.newStart}-${relocation.newEnd}`;
+  }
+  return `  ${relocation.startHash}: line ${relocation.oldStart} -> ${relocation.newStart}`;
+}
+
+function formatRelocationWarning(relocations: Relocation[]): string {
+  const shown = relocations.slice(0, 5).map(formatRelocation);
+  const hidden = relocations.length > shown.length
+    ? [`  ... ${relocations.length - shown.length} more relocated range(s)`]
+    : [];
+  return [
+    `[RELOCATED] ${relocations.length} range(s) relocated via hash matching:`,
+    ...shown,
+    ...hidden,
+    "Please review the diff carefully.",
+  ].join("\n");
+}
+
 export function findHashLines(file: Pick<HashlineFile, "lineHashes">, hash: string): number[] {
   const matches: number[] = [];
   file.lineHashes.forEach((lineHash, index) => {
@@ -97,7 +126,7 @@ export function fuzzyMatch(
 ): MatchResult {
   const matched: HashlineEdit[] = [];
   const unmatched: HashlineEdit[] = [];
-  let relocationCount = 0;
+  const relocations: Relocation[] = [];
 
   for (const edit of edits) {
     const resolved = resolveEdit(currentFile, edit);
@@ -107,10 +136,21 @@ export function fuzzyMatch(
     }
 
     if (
-      (edit.pos.line !== undefined && edit.pos.line !== resolved.pos.line) ||
-      (edit.end?.line !== undefined && resolved.end && edit.end.line !== resolved.end.line)
+      edit.pos.line !== undefined &&
+      resolved.pos.line !== undefined &&
+      (
+        edit.pos.line !== resolved.pos.line ||
+        (edit.end?.line !== undefined && resolved.end?.line !== undefined && edit.end.line !== resolved.end.line)
+      )
     ) {
-      relocationCount++;
+      relocations.push({
+        startHash: edit.pos.hash,
+        endHash: edit.end?.hash,
+        oldStart: edit.pos.line,
+        newStart: resolved.pos.line,
+        oldEnd: edit.end?.line,
+        newEnd: resolved.end?.line,
+      });
     }
     matched.push(resolved);
   }
@@ -118,8 +158,8 @@ export function fuzzyMatch(
   return {
     matched,
     unmatched,
-    warnings: relocationCount > 0
-      ? [`[RELOCATED] ${relocationCount} range(s) relocated via hash matching. Please review the diff carefully.`]
+    warnings: relocations.length > 0
+      ? [formatRelocationWarning(relocations)]
       : [],
   };
 }
