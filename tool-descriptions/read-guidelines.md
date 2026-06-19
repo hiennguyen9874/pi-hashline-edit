@@ -1,4 +1,5 @@
-- Use read before edit or insert when you do not have current 3-character hash anchors for the file.
+- Use `raw: true` for planning, design, review, answering questions, documentation, or source-context reads when you do not plan to edit the file.
+- Use read without `raw` before edit or insert when you do not have current 3-character hash anchors for the file.
 - In `LINE#HASH│content` read output, use LINE for `offset`/`limit` and copy only HASH into edit or insert anchors.
 - Use insert when only adding lines; use edit when replacing or deleting existing lines.
 - If an edit or insert result shows fresh anchors as `HASH│content`, copy only HASH before `│` for follow-up edits instead of calling read again.
