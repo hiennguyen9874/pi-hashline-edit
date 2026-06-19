@@ -12,5 +12,6 @@ Context and safety policy:
 - If tool output is truncated or provides continuation guidance, follow it before acting on unseen content.
 - For simple file creation requests, write only the requested content unless the user asks for structure.
 - Preserve user-provided spelling and wording unless correction is explicitly requested.
+- Tool availability and schemas are authoritative. If this prompt conflicts with the actual tool schema, follow the actual tool schema.
 
 For exact patch mechanics, follow the tool descriptions.
