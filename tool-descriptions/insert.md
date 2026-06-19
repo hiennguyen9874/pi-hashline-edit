@@ -11,6 +11,7 @@ Each entry is an insertion operation:
 
 The anchor line itself is preserved — `lines` are inserted after or before it.
 Do not include the anchor line's content in `lines` unless intentional duplication.
+Do not use `after` or `before` as object keys. Use `anchor` plus `direction`.
 
 Example:
 ```json

@@ -1,1 +1,1 @@
-Insert new lines before or after an existing HASH anchor without changing existing lines. In LINE#HASH│content, copy only HASH.
+Insert lines. Shape: {"path":"...","edits":[{"anchor":"HASH","direction":"after|before","lines":[...]}]}. Do not use after/before keys. In LINE#HASH│content, copy only HASH.

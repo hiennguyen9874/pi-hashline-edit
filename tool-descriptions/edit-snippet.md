@@ -1,1 +1,1 @@
-Replace/delete text via 3-character hash anchors from read. Use insert for pure additions. In LINE#HASH│content, copy only HASH.
+Replace/delete text. Shape: {"path":"...","edits":[{"start":"HASH","end":"HASH","lines":[...]}]}. Put path only at top level. In LINE#HASH│content, copy only HASH.
