@@ -6,3 +6,4 @@
 - Preserve user-provided spelling and wording unless correction is explicitly requested.
 - Tool availability and schemas are authoritative. If this prompt conflicts with the actual tool schema, follow the actual tool schema.
 - For exact patch mechanics, parameters and anchor behavior, follow the tool descriptions.
+- If an edit or insert result shows fresh anchors as `HASH│content`, copy only HASH before `│` for follow-up edits instead of calling read again.
