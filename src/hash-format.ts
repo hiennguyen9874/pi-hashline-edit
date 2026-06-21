@@ -54,15 +54,39 @@ export function computeLineHash(line: string, retry = 0): string {
   return hashToString(getHasher().h32(input, 0) >>> 0);
 }
 
+function contextInput(prev: string, curr: string, next: string, retry: number): string {
+  const base = `${prev}\0${curr}\0${next}`;
+  return retry === 0 ? base : `${base}\0R${retry}`;
+}
+
+export function computeLineHashFromContext(
+  prev: string,
+  curr: string,
+  next: string,
+  retry = 0,
+): string {
+  return hashToString(getHasher().h32(
+    contextInput(
+      canonicalizeLine(prev),
+      canonicalizeLine(curr),
+      canonicalizeLine(next),
+      retry,
+    ),
+    0,
+  ) >>> 0);
+}
+
 export function computeLineHashes(content: string): string[] {
   const lines = splitVisibleLines(content);
   const assigned = new Set<string>();
-  return lines.map((line) => {
+  return lines.map((line, index) => {
+    const prev = lines[index - 1] ?? "";
+    const next = lines[index + 1] ?? "";
     let retry = 0;
-    let hash = computeLineHash(line, retry);
+    let hash = computeLineHashFromContext(prev, line, next, retry);
     while (assigned.has(hash)) {
       retry += 1;
-      hash = computeLineHash(line, retry);
+      hash = computeLineHashFromContext(prev, line, next, retry);
     }
     assigned.add(hash);
     return hash;

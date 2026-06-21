@@ -104,7 +104,8 @@ describe("stale-position compound edits", () => {
     // ── Verify formatHashlineRegion produces valid anchors ──
     const anchorStart = 1; // min(1, 1 - 2)
     const anchorEnd = 10; // min(13, 8 + 2)
-    const region = formatHashlineRegion(expectedLines, anchorStart, anchorEnd);
+    const regionFile = buildHashlineFile(expectedLines.join("\n"));
+    const region = formatHashlineRegion(expectedLines, anchorStart, anchorEnd, regionFile.lineHashes);
     expect(region).toContain("header-1");
     expect(region).toContain("NEW_LINE_5");
     // Range ends at line 10 of final doc (8 + 2 context), which is "line7"

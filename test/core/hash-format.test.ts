@@ -34,10 +34,16 @@ describe("hash-format", () => {
     expect(hashes.every((hash) => HASH_RE.test(hash))).toBe(true);
   });
 
+  it("uses neighboring lines in the per-file hash", () => {
+    const first = computeLineHashes("alpha\ntarget\ngamma")[1]!;
+    const second = computeLineHashes("alpha\ntarget\ndelta")[1]!;
+    expect(second).not.toBe(first);
+  });
+
   it("assigns different anchors to identical content occurrences", () => {
-    const hashes = computeLineHashes("}\n}\n}");
-    expect(hashes).toHaveLength(3);
-    expect(new Set(hashes).size).toBe(3);
+    const hashes = computeLineHashes("x\n}\ny\nx\n}\ny");
+    expect(hashes).toHaveLength(6);
+    expect(new Set(hashes).size).toBe(6);
   });
 
   it("does not create a synthetic hash for terminal newline", () => {
@@ -45,10 +51,14 @@ describe("hash-format", () => {
     expect(computeLineHashes("")).toEqual([]);
   });
 
-  it("hashes deterministically after readiness is awaited", async () => {
+  it("keeps far-away hashes stable when a neighbor changes", async () => {
     await ensureHasherReady();
-    const first = computeLineHashes("same\ncontent\n}");
-    const second = computeLineHashes("same\ncontent\n}");
-    expect(second).toEqual(first);
+    const first = computeLineHashes("one\ntwo\nthree\nfour\nfive");
+    const second = computeLineHashes("one\nTWO\nthree\nfour\nfive");
+    expect(second[0]).not.toBe(first[0]);
+    expect(second[1]).not.toBe(first[1]);
+    expect(second[2]).not.toBe(first[2]);
+    expect(second[3]).toBe(first[3]);
+    expect(second[4]).toBe(first[4]);
   });
 });

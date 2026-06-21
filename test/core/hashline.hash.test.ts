@@ -65,10 +65,10 @@ describe("computeLineHash", () => {
     expect(computeLineHash(["hello\r"], 0)).toBe(computeLineHash(["hello"], 0));
   });
 
-  it("produces same hash for same content", () => {
+  it("incorporates neighboring line context", () => {
     const h1 = computeLineHash(["prev", "}", "next"], 1);
     const h2 = computeLineHash(["other", "}", "lines"], 1);
-    expect(h1).toBe(h2);
+    expect(h1).not.toBe(h2);
   });
 });
 
@@ -80,16 +80,16 @@ describe("hash-only hashline contract", () => {
     expect(file.lineHashes.every((hash) => /^[A-Za-z0-9_\-]{3}$/.test(hash))).toBe(true);
   });
 
-  it("formats hash-only anchors by default", () => {
-    const text = formatHashlineRegion(["alpha", "beta"], 1, 2);
-    expect(text).toMatch(/^[A-Za-z0-9_\-]{3}│alpha\n[A-Za-z0-9_\-]{3}│beta$/);
-    expect(text).not.toMatch(/^\s*1#/);
+  it("formats LINE#HASH anchors by default", () => {
+    const file = buildHashlineFile("alpha\nbeta");
+    const text = formatHashlineRegion(file.lines, 1, 2, file.lineHashes);
+    expect(text).toMatch(/^1#[A-Za-z0-9_\-]{3}│alpha\n2#[A-Za-z0-9_\-]{3}│beta$/);
   });
 
   it("formats duplicate lines with the stored collision-resolved hashes", () => {
     const file = buildHashlineFile("same\nsame\nother\nsame");
-    const text = formatHashlineRegion(file.lines, 1, 4);
-    const displayedHashes = text.split("\n").map((line) => line.slice(0, 3));
+    const text = formatHashlineRegion(file.lines, 1, 4, file.lineHashes);
+    const displayedHashes = text.split("\n").map((line) => line.split("#", 2)[1]!.slice(0, 3));
 
     expect(displayedHashes).toEqual(file.lineHashes);
   });
@@ -118,7 +118,7 @@ describe("hash-only hashline contract", () => {
     expect(() => applyHashlineEdits(content, [stale])).toThrow(/stale anchor|E_STALE_ANCHOR/);
   });
 
-  it("computeHashFromContext matches current-line computeLineHash", () => {
+  it("computeHashFromContext matches context-aware computeLineHash", () => {
     const lines = ["  hello  ", "world", "  foo"];
     const fromFile = computeLineHash(lines, 1);
     const fromContext = computeHashFromContext(

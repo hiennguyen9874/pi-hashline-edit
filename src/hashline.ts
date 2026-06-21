@@ -4,7 +4,12 @@
  * Uses 3-character xxHash anchors with per-file collision resolution.
  */
 
-import { computeLineHashes, computeLineHash as computeSingleLineHash, HASH_RE, HASH_CHARS_CLASS } from "./hash-format";
+import {
+  computeLineHashes,
+  computeLineHashFromContext,
+  HASH_RE,
+  HASH_CHARS_CLASS,
+} from "./hash-format";
 import { ANCHOR_SEP, CONTENT_SEP, formatAnchorPrefix } from "./anchor-display";
 
 // --- Types ---
@@ -47,11 +52,15 @@ export function normalizeLine(line: string): string {
 }
 
 export function computeLineHash(fileLines: readonly string[], index: number): string {
-  return computeSingleLineHash(fileLines[index] ?? "");
+  return computeLineHashFromContext(
+    fileLines[index - 1] ?? "",
+    fileLines[index] ?? "",
+    fileLines[index + 1] ?? "",
+  );
 }
 
-export function computeHashFromContext(_prev: string, curr: string, _next: string): string {
-  return computeSingleLineHash(curr);
+export function computeHashFromContext(prev: string, curr: string, next: string): string {
+  return computeLineHashFromContext(prev, curr, next);
 }
 
 export function buildHashlineFile(content: string): HashlineFile {
@@ -506,7 +515,7 @@ export function formatHashlineRegion(
   fileLines: readonly string[],
   startLine: number,
   endLine: number,
-  lineHashes: readonly string[] = computeLineHashes(fileLines.join("\n")),
+  lineHashes: readonly string[],
 ): string {
   const lineNumberWidth = String(endLine).length;
   return fileLines

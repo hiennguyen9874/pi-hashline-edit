@@ -115,7 +115,8 @@ describe("formatHashlineReadPreview", () => {
 describe("formatHashlineRegion", () => {
   it("formats lines with LINE#HASH anchors by default", () => {
     const fileLines = ["", "", "", "", "alpha", "beta", "gamma"];
-    const result = formatHashlineRegion(fileLines, 5, 7);
+    const file = buildHashlineFile(fileLines.join("\n"));
+    const result = formatHashlineRegion(fileLines, 5, 7, file.lineHashes);
 
     expect(result).toBe(
       `5#${computeLineHash(fileLines, 4)}│alpha\n` +
@@ -126,7 +127,8 @@ describe("formatHashlineRegion", () => {
 
   it("pads region line numbers in default line-hash display mode", () => {
     const fileLines = ["", "", "", "", "", "", "", "alpha", "beta", "gamma"];
-    const result = formatHashlineRegion(fileLines, 8, 10);
+    const file = buildHashlineFile(fileLines.join("\n"));
+    const result = formatHashlineRegion(fileLines, 8, 10, file.lineHashes);
 
     expect(result).toBe(
       ` 8#${computeLineHash(fileLines, 7)}│alpha\n` +
@@ -136,12 +138,14 @@ describe("formatHashlineRegion", () => {
   });
 
   it("handles a single line", () => {
-    const result = formatHashlineRegion(["hello"], 1, 1);
-    expect(result).toBe(`1#${computeLineHash(["hello"], 0)}│hello`);
+    const fileLines = ["hello"];
+    const file = buildHashlineFile(fileLines.join("\n"));
+    const result = formatHashlineRegion(fileLines, 1, 1, file.lineHashes);
+    expect(result).toBe(`1#${computeLineHash(fileLines, 0)}│hello`);
   });
 
   it("handles empty array", () => {
-    const result = formatHashlineRegion([], 1, 1);
+    const result = formatHashlineRegion([], 1, 1, []);
     expect(result).toBe("");
   });
 });
