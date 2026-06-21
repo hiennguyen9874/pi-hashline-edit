@@ -61,6 +61,9 @@ function anchorMoved(anchor: Anchor | undefined, resolved: Anchor | undefined): 
 
 export function attachSnapshotLines(edits: HashlineEdit[], snapshotFile: HashlineFile): HashlineEdit[] {
   return edits.map((edit) => {
+    if (edit.op === "insert_head" || edit.op === "insert_tail") {
+      return edit;
+    }
     const posLine = resolveUniqueHash(snapshotFile, edit.pos.hash);
     const endLine = edit.end ? resolveUniqueHash(snapshotFile, edit.end.hash) : null;
     return {
@@ -79,6 +82,9 @@ function resolveAnchor(file: HashlineFile, anchor: Anchor): Anchor | null {
 }
 
 function resolveEdit(file: HashlineFile, edit: HashlineEdit): HashlineEdit | null {
+  if (edit.op === "insert_head" || edit.op === "insert_tail") {
+    return edit;
+  }
   const pos = resolveAnchor(file, edit.pos);
   if (!pos) return null;
   const end = edit.end ? resolveAnchor(file, edit.end) : undefined;
@@ -136,6 +142,10 @@ export function fuzzyMatch(
     }
 
     if (
+      edit.op !== "insert_head" &&
+      edit.op !== "insert_tail" &&
+      resolved.op !== "insert_head" &&
+      resolved.op !== "insert_tail" &&
       edit.pos.line !== undefined &&
       resolved.pos.line !== undefined &&
       (

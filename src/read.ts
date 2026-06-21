@@ -138,6 +138,39 @@ export function formatHashlineReadPreview(
   };
 }
 
+function computeReadSeenLines(
+  text: string,
+  options: {
+    offset?: number;
+    limit?: number;
+    outputLines?: number;
+    firstLineExceedsLimit?: boolean;
+  },
+): Set<number> {
+  if (options.firstLineExceedsLimit) {
+    return new Set<number>();
+  }
+
+  const allLines = getPreviewLines(text);
+  const totalLines = allLines.length;
+  const startLine = normalizePositiveInteger(options.offset, "offset") ?? 1;
+  if (totalLines === 0 || startLine > totalLines) {
+    return new Set<number>();
+  }
+
+  const limit = normalizePositiveInteger(options.limit, "limit");
+  const requestedEnd = limit
+    ? Math.min(startLine - 1 + limit, totalLines)
+    : totalLines;
+  const visibleCount = options.outputLines ?? (requestedEnd - startLine + 1);
+  const visibleEnd = Math.min(startLine + visibleCount - 1, requestedEnd);
+  const seenLines = new Set<number>();
+  for (let line = startLine; line <= visibleEnd; line++) {
+    seenLines.add(line);
+  }
+  return seenLines;
+}
+
 export function registerReadTool(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "read",
@@ -216,17 +249,25 @@ export function registerReadTool(pi: ExtensionAPI): void {
       const normalized = normalizeToLF(stripBom(file.text).text);
       if (!params.raw) {
         await ensureHasherReady();
-        const hf = buildHashlineFile(normalized);
-        setReadSnapshot(absolutePath, hf);
-        if (pi.events) {
-          pi.events.emit("hashline:read-snapshot", { path: absolutePath, file: hf });
-        }
       }
       const preview = formatHashlineReadPreview(normalized, {
         offset: params.offset,
         limit: params.limit,
         raw: params.raw,
       });
+      if (!params.raw) {
+        const hf = buildHashlineFile(normalized);
+        const seenLines = computeReadSeenLines(normalized, {
+          offset: params.offset,
+          limit: params.limit,
+          outputLines: preview.truncation?.outputLines,
+          firstLineExceedsLimit: preview.truncation?.firstLineExceedsLimit,
+        });
+        setReadSnapshot(absolutePath, hf, seenLines);
+        if (pi.events) {
+          pi.events.emit("hashline:read-snapshot", { path: absolutePath, file: hf, seenLines });
+        }
+      }
       const snapshot = await getFileSnapshot(absolutePath);
 
       // A U+FFFD anywhere in the decoded text means the file held bytes that

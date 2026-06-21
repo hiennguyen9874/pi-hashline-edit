@@ -182,6 +182,7 @@ export async function resolveEditTarget(
   absolutePath: string,
   path: string,
   accessMode: number,
+  options: { allowEmpty?: boolean } = {},
 ): Promise<EditTargetResult> {
   try {
     await fsAccess(absolutePath, accessMode);
@@ -219,7 +220,7 @@ export async function resolveEditTarget(
 
   const { bom, text: content } = stripBom(file.text);
   const normalized = normalizeToLF(content);
-  if (normalized.length === 0) {
+  if (normalized.length === 0 && !options.allowEmpty) {
     return {
       ok: false,
       code: "E_EMPTY_FILE",

@@ -16,7 +16,7 @@ import { ANCHOR_SEP, CONTENT_SEP, formatAnchorPrefix } from "./anchor-display";
 
 export type Anchor = { hash: string; line?: number };
 export type HashlineEdit = {
-  op: "replace" | "append" | "prepend";
+  op: "replace" | "append" | "prepend" | "insert_head" | "insert_tail";
   pos: Anchor;
   end?: Anchor;
   lines: string[];
@@ -239,7 +239,7 @@ export function hashlineParseText(edit: string[] | string | null, file?: Hashlin
 export function resolveEditAnchors(edits: HashlineToolEdit[], file?: HashlineFile): HashlineEdit[] {
   return edits.map((edit) => ({
     op: edit.op,
-    pos: parseAnchorRef(edit.pos),
+    pos: edit.pos ? parseAnchorRef(edit.pos) : { hash: "", line: 0 },
     ...(edit.end ? { end: parseAnchorRef(edit.end) } : {}),
     lines: hashlineParseText(edit.lines ?? null, file),
     ...(edit.current !== undefined ? { current: edit.current } : {}),
@@ -250,8 +250,8 @@ export function resolveEditAnchors(edits: HashlineToolEdit[], file?: HashlineFil
 
 /** Schema-level edit as received from the tool layer (pos/end are tag strings, lines may be string|null). */
 export type HashlineToolEdit = {
-  op: "replace" | "append" | "prepend";
-  pos: string;
+  op: "replace" | "append" | "prepend" | "insert_head" | "insert_tail";
+  pos?: string;
   end?: string;
   lines?: string[] | string | null;
   current?: string;
@@ -271,6 +271,8 @@ function maybeWarnSuspiciousUnicodeEscapePlaceholder(
 }
 
 function describeEdit(edit: HashlineEdit): string {
+  if (edit.op === "insert_head") return "insert head";
+  if (edit.op === "insert_tail") return "insert tail";
   return edit.end
     ? `replace ${edit.pos.hash}-${edit.end.hash}`
     : `replace ${edit.pos.hash}`;
@@ -285,6 +287,15 @@ export function validateAnchors(
   edits: HashlineEdit[],
 ) : AnchorValidation {
   for (const edit of edits) {
+    if (edit.op === "insert_head" || edit.op === "insert_tail") {
+      continue;
+    }
+    if (!edit.pos) {
+      return {
+        ok: false,
+        message: "[E_BAD_REF] Anchored edits require a non-empty anchor.",
+      };
+    }
     if (
       edit.end &&
       edit.pos.line !== undefined &&
@@ -319,7 +330,7 @@ export type EditSpan = {
   start: number;
   end: number;
   replacement: string;
-  op: "replace" | "append" | "prepend";
+  op: "replace" | "append" | "prepend" | "insert_head" | "insert_tail";
   lineShiftStart: number;
   lineDelta: number;
 };
@@ -349,6 +360,36 @@ export function resolveEditSpans(
   const spans: EditSpan[] = [];
 
   for (const [index, edit] of edits.entries()) {
+    if (edit.op === "insert_head") {
+      const replacement = edit.lines.join("\n") + (file.content.length > 0 ? "\n" : "");
+      spans.push({
+        index,
+        label: describeEdit(edit),
+        start: 0,
+        end: 0,
+        replacement,
+        op: "insert_head",
+        lineShiftStart: 1,
+        lineDelta: edit.lines.length,
+      });
+      continue;
+    }
+
+    if (edit.op === "insert_tail") {
+      const replacement = (file.content.length > 0 && !file.content.endsWith("\n") ? "\n" : "") + edit.lines.join("\n");
+      spans.push({
+        index,
+        label: describeEdit(edit),
+        start: file.content.length,
+        end: file.content.length,
+        replacement,
+        op: "insert_tail",
+        lineShiftStart: file.lines.length + 1,
+        lineDelta: edit.lines.length,
+      });
+      continue;
+    }
+
     const startLine = edit.pos.line;
     const endLine = edit.end?.line ?? edit.pos.line;
     if (startLine === undefined || endLine === undefined) {

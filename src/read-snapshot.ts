@@ -14,12 +14,13 @@ import type { HashlineFile } from "./hashline";
 export interface ReadSnapshot {
   path: string;
   file: HashlineFile;
+  seenLines?: Set<number>;
 }
 
 let lastReadSnapshot: ReadSnapshot | undefined;
 
-export function setReadSnapshot(path: string, file: HashlineFile): void {
-  lastReadSnapshot = { path, file };
+export function setReadSnapshot(path: string, file: HashlineFile, seenLines?: Set<number>): void {
+  lastReadSnapshot = { path, file, ...(seenLines ? { seenLines } : {}) };
 }
 
 export function getReadSnapshot(path: string): ReadSnapshot | undefined {

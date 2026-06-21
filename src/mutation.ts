@@ -43,6 +43,63 @@ export type MutationOptions = {
   initialWarnings?: string[];
 };
 
+function formatLineRanges(lines: number[]): string {
+  const sorted = [...new Set(lines)].sort((a, b) => a - b);
+  const ranges: string[] = [];
+  let start: number | undefined;
+  let previous: number | undefined;
+  for (const line of sorted) {
+    if (start === undefined || previous === undefined) {
+      start = line;
+      previous = line;
+      continue;
+    }
+    if (line === previous + 1) {
+      previous = line;
+      continue;
+    }
+    ranges.push(start === previous ? `${start}` : `${start}-${previous}`);
+    start = line;
+    previous = line;
+  }
+  if (start !== undefined && previous !== undefined) {
+    ranges.push(start === previous ? `${start}` : `${start}-${previous}`);
+  }
+  return ranges.join(", ");
+}
+
+function assertSeenLines(path: string, edits: HashlineEdit[], seenLines: Set<number> | undefined): void {
+  if (!seenLines || seenLines.size === 0) {
+    return;
+  }
+
+  const unseen: number[] = [];
+  for (const edit of edits) {
+    if (edit.op === "insert_head" || edit.op === "insert_tail") {
+      continue;
+    }
+    const startLine = edit.pos.line;
+    const endLine = edit.end?.line ?? edit.pos.line;
+    if (startLine === undefined || endLine === undefined) {
+      continue;
+    }
+    if (edit.op === "append" || edit.op === "prepend") {
+      if (!seenLines.has(startLine)) unseen.push(startLine);
+      continue;
+    }
+    for (let line = startLine; line <= endLine; line++) {
+      if (!seenLines.has(line)) unseen.push(line);
+    }
+  }
+
+  if (unseen.length > 0) {
+    const ranges = formatLineRanges(unseen);
+    throw new Error(
+      `[E_UNSEEN_LINES] Edit targets line(s) ${ranges} of ${path}, but the latest read did not display them. Re-read that range first, then retry the edit.`,
+    );
+  }
+}
+
 // ─── Shared mutation engine ────────────────────────────────────────────────
 
 /**
@@ -59,10 +116,12 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
   const mutationTargetPath = await resolveMutationTargetPath(absolutePath);
   return withFileMutationQueue(mutationTargetPath, async () => {
     throwIfAborted(signal);
+    const allowEmptyTarget = toolEdits.every((edit) => edit.op === "insert_head" || edit.op === "insert_tail");
     const target = await resolveEditTarget(
       absolutePath,
       path,
       constants.R_OK | constants.W_OK,
+      { allowEmpty: allowEmptyTarget },
     );
     if (!target.ok) {
       const prefix = target.code ? `[${target.code}] ` : "";
@@ -93,6 +152,7 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
 
     // Tier 1: exact hash match
     const exactResult = partitionExact(editsWithSnapshotLines, currentFile);
+    assertSeenLines(path, exactResult.matched, snapshot?.seenLines);
     let allWarnings: string[] = [...initialWarnings];
     let fuzzyEdits: HashlineEdit[] = [];
     let remaining = exactResult.unmatched;
@@ -170,17 +230,18 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
     if (!resolved_) {
       const retryLines = new Set<number>();
       const mismatches = remaining.flatMap((e) => {
+        if (e.op === "insert_head" || e.op === "insert_tail") return [];
         const refs = e.end ? [e.pos, e.end] : [e.pos];
-        return refs.map((r) => {
+        return refs.flatMap((r) => {
           const line = r.line ?? 1;
           retryLines.add(line);
           const candidates = findHashLines(currentFile, r.hash);
-          return {
+          return [{
             line,
             expected: r.hash,
             actual: r.line ? currentFile.lineHashes[r.line - 1] ?? "OOB" : "OOB",
             candidates,
-          };
+          }];
         });
       });
       throw new Error(

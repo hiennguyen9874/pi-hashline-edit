@@ -22,12 +22,12 @@ import {
 
 const insertEntrySchema = Type.Object(
   {
-    anchor: Type.String({
-      description: "3-character hash anchor copied from read output; in LINE#HASH│content, use only HASH",
-    }),
+    anchor: Type.Optional(Type.String({
+      description: "3-character hash anchor copied from read output; required for before/after; omit for head/tail",
+    })),
     direction: Type.String({
-      enum: ["after", "before"],
-      description: 'Insert direction: "after" or "before" the anchor line.',
+      enum: ["after", "before", "head", "tail"],
+      description: 'Insert direction: "after" or "before" the anchor line, "head" for start of file, or "tail" for end of file.',
     }),
     lines: Type.Array(Type.String(), {
       minItems: 1,
@@ -116,11 +116,22 @@ export function assertInsertRequest(request: unknown): asserts request is Insert
         throw new Error(`Insert ${index + 1} contains unknown field "${key}".`);
       }
     }
-    if (typeof edit.anchor !== "string" || edit.anchor.length === 0) {
-      throw new Error(`Insert ${index + 1} requires a non-empty "anchor" string.`);
+    if (
+      edit.direction !== "before" &&
+      edit.direction !== "after" &&
+      edit.direction !== "head" &&
+      edit.direction !== "tail"
+    ) {
+      throw new Error(`Insert ${index + 1} requires "direction" to be "before", "after", "head", or "tail".`);
     }
-    if (edit.direction !== "before" && edit.direction !== "after") {
-      throw new Error(`Insert ${index + 1} requires "direction" to be "before" or "after".`);
+    if ((edit.direction === "before" || edit.direction === "after") && (typeof edit.anchor !== "string" || edit.anchor.length === 0)) {
+      throw new Error(`Insert ${index + 1} requires a non-empty "anchor" string for "${edit.direction}".`);
+    }
+    if ((edit.direction === "head" || edit.direction === "tail") && edit.anchor !== undefined) {
+      throw new Error(`Insert ${index + 1} must omit "anchor" when direction is "${edit.direction}".`);
+    }
+    if ((edit.direction === "head" || edit.direction === "tail") && edit.current !== undefined) {
+      throw new Error(`Insert ${index + 1} must omit "current" when direction is "${edit.direction}".`);
     }
     if (!Array.isArray(edit.lines) || edit.lines.length === 0 || !edit.lines.every((line) => typeof line === "string")) {
       throw new Error(`Insert ${index + 1} requires non-empty "lines" array of strings.`);
@@ -133,8 +144,15 @@ export function assertInsertRequest(request: unknown): asserts request is Insert
 
 function normalizeInsertItems(edits: Record<string, unknown>[]): HashlineToolEdit[] {
   return edits.map((edit) => {
-    const anchor = edit.anchor as string;
     const direction = edit.direction as string;
+    if (direction === "head" || direction === "tail") {
+      return {
+        op: direction === "head" ? "insert_head" : "insert_tail",
+        lines: edit.lines as string[],
+      };
+    }
+
+    const anchor = edit.anchor as string;
     const op = direction === "before" ? "prepend" as const : "append" as const;
     return {
       op,
@@ -206,6 +224,14 @@ export async function computeInsertPreview(
 
   const lines: string[] = [];
   for (const edit of toolEdits) {
+    if (edit.op === "insert_head") {
+      lines.push("  insert head");
+      continue;
+    }
+    if (edit.op === "insert_tail") {
+      lines.push("  insert tail");
+      continue;
+    }
     const direction = edit.op === "prepend" ? "before" : "after";
     lines.push(`  insert ${direction} ${edit.pos}`);
   }
@@ -367,8 +393,9 @@ let _insertPi: ExtensionAPI | undefined;
 
 export function registerInsertTool(pi: ExtensionAPI): void {
   _insertPi = pi;
-  pi.events.on("hashline:read-snapshot", (data: { path: string; file: import("./hashline").HashlineFile }) => {
-    setReadSnapshot(data.path, data.file);
+  pi.events.on("hashline:read-snapshot", (data: unknown) => {
+    const snapshot = data as { path: string; file: import("./hashline").HashlineFile; seenLines?: Set<number> };
+    setReadSnapshot(snapshot.path, snapshot.file, snapshot.seenLines);
   });
   pi.registerTool(insertToolDefinition);
 }
