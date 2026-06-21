@@ -320,10 +320,19 @@ export type EditSpan = {
   end: number;
   replacement: string;
   op: "replace" | "append" | "prepend";
+  lineShiftStart: number;
+  lineDelta: number;
+};
+
+type BoundaryDuplicationWarning = {
+  label: "after" | "before";
+  editLabel: string;
+  survivingLineIndex: number;
+  survivingLineContent: string;
 };
 
 export type SpanResolution =
-  | { ok: true; spans: EditSpan[]; noopEdits: NoopEdit[]; warnings: string[] }
+  | { ok: true; spans: EditSpan[]; noopEdits: NoopEdit[]; warnings: string[]; boundaryWarnings: BoundaryDuplicationWarning[] }
   | { ok: false; code: string; message: string };
 
 export function resolveEditSpans(
@@ -332,6 +341,7 @@ export function resolveEditSpans(
 ): SpanResolution {
   const noopEdits: NoopEdit[] = [];
   const warnings: string[] = [];
+  const boundaryWarnings: BoundaryDuplicationWarning[] = [];
 
   maybeWarnSuspiciousUnicodeEscapePlaceholder(edits, warnings);
 
@@ -379,6 +389,8 @@ export function resolveEditSpans(
         end: start,
         replacement,
         op: "append",
+        lineShiftStart: startLine + 1,
+        lineDelta: edit.lines.length,
       });
       continue;
     }
@@ -393,6 +405,8 @@ export function resolveEditSpans(
         end: start,
         replacement,
         op: "prepend",
+        lineShiftStart: startLine,
+        lineDelta: edit.lines.length,
       });
       continue;
     }
@@ -411,20 +425,27 @@ export function resolveEditSpans(
     }
 
     // Boundary duplication warning
-    const checkBoundary = (candidate: string | undefined, boundary: string | undefined, label: string) => {
+    const checkBoundary = (
+      candidate: string | undefined,
+      boundary: string | undefined,
+      label: "after" | "before",
+      survivingLineIndex: number,
+    ) => {
       if (!candidate || !boundary) return;
-      const c = candidate.trim();
-      const b = boundary.trim();
-      if (c && /[\p{L}\p{N}]/u.test(c) && c === b) {
-        warnings.push(
-          `Potential boundary duplication ${label} ${describeEdit(edit)}: the replacement ${label === "after" ? "ends" : "starts"} with a line that matches the ${label === "after" ? "next surviving" : "preceding"} line after trim.`,
-        );
+      if (/[\p{L}\p{N}]/u.test(candidate) && candidate === boundary) {
+        boundaryWarnings.push({
+          label,
+          editLabel: describeEdit(edit),
+          survivingLineIndex,
+          survivingLineContent: boundary,
+        });
       }
     };
-    checkBoundary(edit.lines.at(-1), file.lines[endLine], "after");
-    if (startLine > 1) checkBoundary(edit.lines[0], file.lines[startLine - 2], "before");
+    checkBoundary(edit.lines.at(-1), file.lines[endLine], "after", endLine + 1);
+    if (startLine > 1) checkBoundary(edit.lines[0], file.lines[startLine - 2], "before", startLine - 1);
 
     // Resolve to span
+    const lineDelta = edit.lines.length - (endLine - startLine + 1);
     let span: EditSpan;
     if (edit.lines.length > 0) {
       span = {
@@ -434,6 +455,8 @@ export function resolveEditSpans(
         end: file.lineStarts[endLine - 1]! + file.lines[endLine - 1]!.length,
         replacement: edit.lines.join("\n"),
         op: "replace",
+        lineShiftStart: endLine + 1,
+        lineDelta,
       };
     } else if (startLine === 1 && endLine === file.lines.length) {
       span = {
@@ -443,6 +466,8 @@ export function resolveEditSpans(
         end: file.content.length,
         replacement: "",
         op: "replace",
+        lineShiftStart: endLine + 1,
+        lineDelta,
       };
     } else if (endLine < file.lines.length) {
       span = {
@@ -452,6 +477,8 @@ export function resolveEditSpans(
         end: file.lineStarts[endLine]!,
         replacement: "",
         op: "replace",
+        lineShiftStart: endLine + 1,
+        lineDelta,
       };
     } else {
       span = {
@@ -461,6 +488,8 @@ export function resolveEditSpans(
         end: file.lineStarts[endLine - 1]! + file.lines[endLine - 1]!.length,
         replacement: "",
         op: "replace",
+        lineShiftStart: endLine + 1,
+        lineDelta,
       };
     }
 
@@ -485,7 +514,30 @@ export function resolveEditSpans(
     }
   }
 
-  return { ok: true, spans, noopEdits, warnings };
+  return { ok: true, spans, noopEdits, warnings, boundaryWarnings };
+}
+
+export function finalizeBoundaryDuplicationWarnings(
+  resultFile: HashlineFile,
+  spans: readonly EditSpan[],
+  boundaryWarnings: readonly BoundaryDuplicationWarning[],
+): string[] {
+  return boundaryWarnings.flatMap((warning) => {
+    const resultLineIndex = warning.survivingLineIndex + spans.reduce((delta, span) => (
+      span.lineShiftStart <= warning.survivingLineIndex ? delta + span.lineDelta : delta
+    ), 0);
+    const resultContent = resultFile.lines[resultLineIndex - 1];
+    if (resultContent !== warning.survivingLineContent) {
+      return [];
+    }
+    const hash = resultFile.lineHashes[resultLineIndex - 1];
+    if (!hash) {
+      return [];
+    }
+    return [
+      `Potential boundary duplication ${warning.label} ${warning.editLabel}: the replacement ${warning.label === "after" ? "ends" : "starts"} with a line that matches the ${warning.label === "after" ? "next surviving" : "preceding"} line. Surviving line anchor (post-edit): "${hash}". Verify and remove the duplicate if unintended.`,
+    ];
+  });
 }
 
 export function applySpans(

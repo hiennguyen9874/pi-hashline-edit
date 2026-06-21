@@ -11,6 +11,7 @@ import {
   resolveEditSpans,
   applySpans,
   resolveEditAnchors,
+  finalizeBoundaryDuplicationWarnings,
   type HashlineToolEdit,
   type HashlineEdit,
   formatMismatchError,
@@ -113,7 +114,11 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
       if (!spanResult.ok) throw new Error(spanResult.message);
       const applied = applySpans(currentFile, spanResult.spans);
       result = applied.file.content;
-      warnings = [...allWarnings, ...(spanResult.warnings ?? [])];
+      warnings = [
+        ...allWarnings,
+        ...(spanResult.warnings ?? []),
+        ...finalizeBoundaryDuplicationWarnings(applied.file, spanResult.spans, spanResult.boundaryWarnings),
+      ];
       noopEdits = spanResult.noopEdits;
     }
 
@@ -145,10 +150,13 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
 
         if (mergedContent !== null) {
           result = mergedContent;
+          const mergedFile = buildHashlineFile(mergedContent);
           warnings = [
             ...allWarnings,
             ...(currentSpans.warnings ?? []),
+            ...finalizeBoundaryDuplicationWarnings(mergedFile, currentSpans.spans, currentSpans.boundaryWarnings),
             ...(snapSpans.warnings ?? []),
+            ...finalizeBoundaryDuplicationWarnings(mergedFile, snapSpans.spans, snapSpans.boundaryWarnings),
           ];
           noopEdits = [
             ...(currentSpans.noopEdits ?? []),

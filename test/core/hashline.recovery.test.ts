@@ -4,6 +4,7 @@ import {
   validateAnchors,
   resolveEditSpans,
   applySpans,
+  finalizeBoundaryDuplicationWarnings,
   formatMismatchError,
   computeLineHash,
   resolveEditAnchors,
@@ -34,11 +35,15 @@ function applyHashlineEdits(content: string, edits: HashlineEdit[], signal?: Abo
   const spanResult = resolveEditSpans(file, exact.matched);
   if (!spanResult.ok) throw new Error(spanResult.message);
   const applied = applySpans(file, spanResult.spans);
+  const warnings = [
+    ...spanResult.warnings,
+    ...finalizeBoundaryDuplicationWarnings(applied.file, spanResult.spans, spanResult.boundaryWarnings),
+  ];
   return {
     content: applied.file.content,
     firstChangedLine: applied.firstChangedLine,
     lastChangedLine: applied.lastChangedLine,
-    warnings: spanResult.warnings.length ? spanResult.warnings : undefined,
+    warnings: warnings.length ? warnings : undefined,
     noopEdits: spanResult.noopEdits.length ? spanResult.noopEdits : undefined,
   };
 }
@@ -201,6 +206,40 @@ describe("applyHashlineEdits — heuristics", () => {
     expect(result.warnings?.[0]).toContain(
       "Potential boundary duplication before",
     );
+    expect(result.warnings?.[0]).toMatch(/Surviving line anchor \(post-edit\): "[A-Za-z0-9_-]{3}"/);
+  });
+
+  it("includes the post-edit surviving line anchor in boundary duplication warnings", () => {
+    const content = "aaa\nbbb\nccc";
+    const edits = [
+      {
+        op: "replace",
+        pos: makeTag(content, 2),
+        lines: ["BBB", "ccc"],
+      },
+    ];
+    const result = applyHashlineEdits(content, edits);
+    const resultFile = buildHashlineFile(result.content);
+
+    expect(result.content).toBe("aaa\nBBB\nccc\nccc");
+    expect(result.warnings?.[0]).toContain(
+      `Surviving line anchor (post-edit): "${resultFile.lineHashes[3]}"`,
+    );
+  });
+
+  it("does not warn when only trimmed boundary lines match", () => {
+    const content = "if (ok) {\n  return value;\n    return value;\n}";
+    const edits = [
+      {
+        op: "replace",
+        pos: makeTag(content, 2),
+        lines: ["  return other;", "return value;"],
+      },
+    ];
+    const result = applyHashlineEdits(content, edits);
+
+    expect(result.content).toBe("if (ok) {\n  return other;\nreturn value;\n    return value;\n}");
+    expect(result.warnings).toBeUndefined();
   });
 
   it("does not auto-correct escaped tab indentation even when the env flag is set", () => {
