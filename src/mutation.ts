@@ -68,8 +68,13 @@ function formatLineRanges(lines: number[]): string {
   return ranges.join(", ");
 }
 
+function isUnseenLineRejectionEnabled(): boolean {
+  const value = process.env.PI_HASHLINE_REJECT_UNSEEN_LINES;
+  return value === "1" || value === "true";
+}
+
 function assertSeenLines(path: string, edits: HashlineEdit[], seenLines: Set<number> | undefined): void {
-  if (!seenLines || seenLines.size === 0) {
+  if (!isUnseenLineRejectionEnabled() || !seenLines || seenLines.size === 0) {
     return;
   }
 

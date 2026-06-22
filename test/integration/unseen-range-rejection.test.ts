@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { readFile } from "fs/promises";
 import registerCore from "../../extensions/core";
 import registerInsert from "../../extensions/insert";
@@ -6,12 +6,46 @@ import { computeLineHash } from "../../src/hashline";
 import { _setReadSnapshotState } from "../../src/read-snapshot";
 import { makeFakePiRegistry, withTempFile } from "../support/fixtures";
 
+const previousUnseenLineRejection = process.env.PI_HASHLINE_REJECT_UNSEEN_LINES;
+
 beforeEach(() => {
   _setReadSnapshotState(undefined);
+  delete process.env.PI_HASHLINE_REJECT_UNSEEN_LINES;
+});
+
+afterEach(() => {
+  _setReadSnapshotState(undefined);
+  if (previousUnseenLineRejection === undefined) delete process.env.PI_HASHLINE_REJECT_UNSEEN_LINES;
+  else process.env.PI_HASHLINE_REJECT_UNSEEN_LINES = previousUnseenLineRejection;
 });
 
 describe("unseen-range rejection", () => {
-  it("rejects an edit anchored outside the latest read window", async () => {
+  it("allows an edit anchored outside the latest read window by default", async () => {
+    await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+      const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
+      const readTool = getTool("read");
+      const editTool = getTool("edit");
+      const ctx = { cwd, ui: { notify() {} } } as any;
+
+      await readTool.execute("r1", { path: "sample.txt", offset: 1, limit: 1 }, undefined, undefined, ctx);
+      const betaAnchor = computeLineHash(["alpha", "beta", "gamma"], 1);
+
+      await editTool.execute(
+        "e1",
+        { path: "sample.txt", edits: [{ start: betaAnchor, end: betaAnchor, lines: ["BETA"] }] },
+        undefined,
+        undefined,
+        ctx,
+      );
+
+      expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
+    });
+  });
+
+  it("rejects an edit anchored outside the latest read window when enabled", async () => {
+    process.env.PI_HASHLINE_REJECT_UNSEEN_LINES = "1";
+
     await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
@@ -82,7 +116,9 @@ describe("unseen-range rejection", () => {
     });
   });
 
-  it("rejects an insert anchored outside the latest read window", async () => {
+  it("rejects an insert anchored outside the latest read window when enabled", async () => {
+    process.env.PI_HASHLINE_REJECT_UNSEEN_LINES = "1";
+
     await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd, path }) => {
       const { pi, getTool } = makeFakePiRegistry();
       registerCore(pi);
