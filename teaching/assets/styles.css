@@ -1,0 +1,198 @@
+/* ─── Shared course stylesheet ─── */
+/* Tufte-inspired: clean typography, generous margins, print-friendly */
+
+:root {
+  --bg: #fffff8;
+  --fg: #111;
+  --muted: #555;
+  --accent: #2255aa;
+  --code-bg: #f5f4f0;
+  --callout-bg: #f0f4ff;
+  --warn-bg: #fff8f0;
+  --border: #ddd;
+  --font-body: "Palatino", "Palatino Linotype", "Georgia", serif;
+  --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
+  --font-sans: -apple-system, "Helvetica Neue", sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  line-height: 1.65;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+}
+
+h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1.45rem;
+  font-weight: 600;
+  margin-top: 2.5rem;
+  margin-bottom: 0.6rem;
+  line-height: 1.2;
+}
+
+h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 1.8rem;
+  margin-bottom: 0.4rem;
+}
+
+h1 + .subtitle {
+  color: var(--muted);
+  font-size: 1rem;
+  margin-top: -0.2rem;
+  margin-bottom: 2rem;
+}
+
+p { margin-bottom: 1rem; }
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+a:hover { border-bottom-color: currentColor; }
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+}
+
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background: var(--code-bg);
+  padding: 1rem 1.2rem;
+  border-radius: 5px;
+  overflow-x: auto;
+  margin: 1.2rem 0;
+  line-height: 1.5;
+  border: 1px solid var(--border);
+}
+pre code {
+  background: none;
+  padding: 0;
+}
+
+.callout {
+  background: var(--callout-bg);
+  border-left: 3px solid var(--accent);
+  padding: 0.8rem 1rem;
+  margin: 1.2rem 0;
+  border-radius: 0 4px 4px 0;
+  font-size: 0.95rem;
+}
+.callout.warn {
+  background: var(--warn-bg);
+  border-left-color: #d97706;
+}
+
+.diagram {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  padding: 1.2rem;
+  margin: 1.2rem 0;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+blockquote {
+  margin: 1.2rem 0;
+  padding: 0.3rem 1rem;
+  border-left: 2px solid var(--border);
+  color: var(--muted);
+  font-style: italic;
+}
+
+ul, ol {
+  margin: 0.8rem 0 1rem 1.5rem;
+}
+li { margin-bottom: 0.35rem; }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2.5rem 0;
+}
+
+.quiz {
+  margin: 2rem 0;
+  padding: 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fafaf7;
+}
+.quiz h3 {
+  margin-top: 0;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.quiz .question {
+  font-weight: 600;
+  margin-bottom: 0.8rem;
+}
+.quiz .option {
+  display: block;
+  padding: 0.4rem 0;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+.quiz .option:hover { color: var(--accent); }
+.quiz .option input { margin-right: 0.5rem; }
+.quiz .feedback {
+  margin-top: 0.8rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  display: none;
+}
+.quiz .feedback.correct { background: #e6f4ea; color: #1a5c2a; display: block; }
+.quiz .feedback.incorrect { background: #fce8e8; color: #8b1a1a; display: block; }
+
+.footer {
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.footer p { margin-bottom: 0.3rem; }
+
+nav.breadcrumb {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+nav.breadcrumb a { color: var(--muted); }
+
+.print-only { display: none; }
+@media print {
+  body { font-size: 11pt; padding: 0; max-width: 100%; }
+  .quiz { border: 1px solid #ccc; }
+  .print-only { display: block; }
+}

@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>0003 — Tool Registration &amp; Architecture</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<nav class="breadcrumb">
+  <a href="../MISSION.md">Mission</a> →
+  <a href="0001-hashline-anchor-system.html">0001: Anchors</a> →
+  <a href="0002-edit-pipeline.html">0002: Edit Pipeline</a> →
+  Lesson 0003
+</nav>
+
+<h1>0003 — Tool Registration &amp; Architecture</h1>
+<p class="subtitle">How Pi extensions register tools, load prompts, and compose with the runtime</p>
+
+<h2>The problem</h2>
+
+<p>
+  You've seen how anchors are computed and how edits flow through the pipeline.
+  But how does Pi <em>know</em> about the <code>read</code>/<code>edit</code>/<code>insert</code>
+  tools in the first place? How do the tool descriptions the LLM sees get loaded?
+  How does the UI preview work?
+</p>
+
+<p>
+  This lesson covers the extension registration layer — the thin but essential
+  membrane between the runtime and the implementation.
+</p>
+
+<h2>The extension entrypoint pattern</h2>
+
+<p>
+  Every Pi extension is a <strong>default-exported function</strong> that receives
+  an <code>ExtensionAPI</code> object. The runtime calls this function once at startup.
+  Here is the entire <code>extensions/core.ts</code>:
+</p>
+
+<pre><code>import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerEditTool } from "../src/edit";
+import { registerReadTool } from "../src/read";
+
+export default function (pi: ExtensionAPI): void {
+  registerEditTool(pi);
+  registerReadTool(pi);
+
+  if (process.env.PI_HASHLINE_DEBUG === "1" || process.env.PI_HASHLINE_DEBUG === "true") {
+    pi.on("session_start", async (_event, ctx) => {
+      ctx.ui.notify("Hashline Edit mode active", "info");
+    });
+  }
+}</code></pre>
+
+<div class="callout">
+  <strong>Key insight:</strong> The extensions directory is just a <em>wiring layer</em>.
+  <code>core.ts</code> imports <code>registerReadTool</code> and <code>registerEditTool</code>
+  from <code>src/</code> and calls them with the <code>pi</code> API. No logic lives here.
+</div>
+
+<h2>The four extensions</h2>
+
+<p>
+  Each extension is one file, one registration call:
+</p>
+
+<table style="width:100%; border-collapse:collapse; margin:1rem 0; font-size:0.9rem;">
+<tr style="border-bottom:1px solid var(--border); text-align:left;">
+  <th style="padding:0.4rem 0.6rem;">Extension</th>
+  <th style="padding:0.4rem 0.6rem;">Tools Registered</th>
+  <th style="padding:0.4rem 0.6rem;">Default?</th>
+</tr>
+<tr style="border-bottom:1px solid var(--border);">
+  <td style="padding:0.4rem 0.6rem; font-family:var(--font-mono); font-size:0.85rem;">extensions/core.ts</td>
+  <td style="padding:0.4rem 0.6rem;">read, edit</td>
+  <td style="padding:0.4rem 0.6rem;">✅ always active</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border);">
+  <td style="padding:0.4rem 0.6rem; font-family:var(--font-mono); font-size:0.85rem;">extensions/insert.ts</td>
+  <td style="padding:0.4rem 0.6rem;">insert</td>
+  <td style="padding:0.4rem 0.6rem;">✅ always active</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border);">
+  <td style="padding:0.4rem 0.6rem; font-family:var(--font-mono); font-size:0.85rem;">extensions/grep.ts</td>
+  <td style="padding:0.4rem 0.6rem;">grep</td>
+  <td style="padding:0.4rem 0.6rem;">disabled by default</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border);">
+  <td style="padding:0.4rem 0.6rem; font-family:var(--font-mono); font-size:0.85rem;">extensions/undo.ts</td>
+  <td style="padding:0.4rem 0.6rem;">undo</td>
+  <td style="padding:0.4rem 0.6rem;">disabled by default</td>
+</tr>
+</table>
+
+<h2>The registerTool() shape</h2>
+
+<p>
+  Each <code>register*Tool</code> function calls <code>pi.registerTool()</code> with a
+  tool definition object. Here is the full shape, drawn from the edit tool:
+</p>
+
+<div class="diagram">
+<span style="color:var(--accent);font-weight:700">ToolDefinition</span>
+<span style="color:var(--muted)">{</span>
+  name:         <span style="color:#1a5c2a">"edit"</span>              <span style="color:var(--muted)">// unique id; replaces built-in</span>
+  label:        <span style="color:#1a5c2a">"Edit"</span>              <span style="color:var(--muted)">// UI display name</span>
+  description:  <span style="color:#1a5c2a">EDIT_DESC</span>           <span style="color:var(--muted)">// LLM-facing tool description</span>
+  promptSnippet: <span style="color:#1a5c2a">EDIT_PROMPT_SNIPPET</span>  <span style="color:var(--muted)">// one-liner in tool list</span>
+  promptGuidelines: <span style="color:#1a5c2a">[...]</span>           <span style="color:var(--muted)">// only on read (rules for tool usage)</span>
+  parameters:   <span style="color:#1a5c2a">TypeBox schema</span>     <span style="color:var(--muted)">// validates args before execute()</span>
+  renderShell:  <span style="color:#1a5c2a">"default"</span>          <span style="color:var(--muted)">// UI wrapper style</span>
+
+  <span style="color:var(--accent);font-weight:700">renderCall</span>(args, theme, context) → Text     <span style="color:var(--muted)">// live preview while user types</span>
+  <span style="color:var(--accent);font-weight:700">renderResult</span>(result, meta, theme, context) → Text  <span style="color:var(--muted)">// rendered output after execution</span>
+  <span style="color:var(--accent);font-weight:700">execute</span>(id, params, signal, onUpdate, ctx) → result  <span style="color:var(--muted)">// the actual tool logic</span>
+<span style="color:var(--muted)">}</span></div>
+
+<h2>How prompt text is loaded</h2>
+
+<p>
+  Tool descriptions live as Markdown files in <code>tool-descriptions/</code>.
+  They are loaded at <strong>module load time</strong> via
+  <code>readFileSync</code>, not at execution time:
+</p>
+
+<pre><code>// From src/edit.ts — runs once when the module is first imported
+const EDIT_DESC = readFileSync(
+  new URL("../tool-descriptions/edit.md", import.meta.url),
+  "utf-8",
+).trim();</code></pre>
+
+<div class="callout">
+  <strong>Why <code>new URL("...", import.meta.url)</code>?</strong>
+  This resolves the path relative to the current <em>source file</em>, not the
+  working directory. The path goes up one level from <code>src/</code> to reach
+  <code>tool-descriptions/</code>. This means the extension works regardless of
+  what directory Pi is started from.
+</div>
+
+<h2>The prompt text pipeline</h2>
+
+<p>
+  Three pieces of text feed into the LLM's context for each tool:
+</p>
+
+<div class="diagram">
+<span style="color:var(--muted)">tool-descriptions/</span>
+  │
+  ├─ <span style="font-weight:700">read.md</span>        → <span style="color:var(--accent)">description</span>     <span style="color:var(--muted)">full tool doc (with {{TEMPLATE}} substitution)</span>
+  ├─ <span style="font-weight:700">read-snippet.md</span> → <span style="color:var(--accent)">promptSnippet</span>  <span style="color:var(--muted)">one-line summary in tool list</span>
+  └─ <span style="font-weight:700">read-guidelines.md</span> → <span style="color:var(--accent)">promptGuidelines</span> <span style="color:var(--muted)">numbered rules embedded in system prompt</span>
+</div>
+
+<p>
+  The <code>read</code> tool is the only one with guidelines — the <code>read-guidelines.md</code>
+  file contains nine bullet rules parsed into an array and injected into the system prompt.
+  Edit and insert rely on their descriptions alone.
+</p>
+
+<h2>Templates in descriptions</h2>
+
+<p>
+  Descriptions can contain <code>{{PLACEHOLDER}}</code> tokens that are replaced
+  at load time. For example, from <code>read.ts</code>:
+</p>
+
+<pre><code>const READ_DESC = readFileSync(
+  new URL("../tool-descriptions/read.md", import.meta.url),
+  "utf-8",
+)
+  .replaceAll("{{DEFAULT_MAX_LINES}}", String(DEFAULT_MAX_LINES))
+  .replaceAll("{{DEFAULT_MAX_BYTES}}", formatSize(DEFAULT_MAX_BYTES))
+  .trim();</code></pre>
+
+<p>
+  This means the LLM sees the actual limits (<em>"Default cap: 2000 lines or 50KB"</em>)
+  without the source file needing to hardcode numbers in the Markdown.
+</p>
+
+<h2>Parameter schemas (TypeBox)</h2>
+
+<p>
+  Each tool defines its parameters with <strong>TypeBox</strong> — a runtime type
+  system that produces JSON Schema for validation. Here is the insert tool schema:
+</p>
+
+<pre><code>const insertEntrySchema = Type.Object({
+  anchor: Type.Optional(Type.String({
+    description: "3-character hash anchor copied from read output; ...",
+  })),
+  direction: Type.String({
+    enum: ["after", "before", "head", "tail"],
+    description: 'Insert direction: "after" or "before" the anchor line, ...',
+  }),
+  lines: Type.Array(Type.String(), {
+    minItems: 1,
+    description: "Lines to insert.",
+  }),
+  current: Type.Optional(Type.String({
+    description: "Optional exact current text of the anchor line; ...",
+  })),
+}, { additionalProperties: false });</code></pre>
+
+<div class="callout">
+  <strong>Why TypeBox?</strong> The <code>description</code> fields inside the schema
+  are exposed to the LLM alongside the JSON Schema — giving it the exact field-level
+  guidance it needs. The <code>additionalProperties: false</code> flag rejects unknown
+  fields, catching typos like <code>anchorr</code> before they reach the logic.
+</div>
+
+<h2>The render lifecycle</h2>
+
+<p>
+  Tools have two render phases:
+</p>
+
+<ol>
+  <li>
+    <strong><code>renderCall(args, theme, context)</code></strong> — called
+    <em>before</em> execution, while the user is typing or the LLM is constructing
+    the call. This is where the edit preview appears (showing the path and
+    planned edits). It uses <code>context.state</code> to cache async preview
+    computations so they don't re-run on every keystroke.
+  </li>
+  <li>
+    <strong><code>renderResult(result, meta, theme, context)</code></strong> —
+    called <em>after</em> execution. For edit/insert this renders the diff
+    with colored +/− lines and summary metrics. It handles partial results
+    (<code>isPartial: true</code> → "Editing..."), errors (red text), and
+    successful changes (diff + line counts).
+  </li>
+</ol>
+
+<p>
+  Both return a <code>Text</code> component from <code>@earendil-works/pi-tui</code> —
+  the terminal UI framework.
+</p>
+
+<h2>The async preview pattern</h2>
+
+<p>
+  The edit tool computes a preview (which file, how many blocks) <em>before</em>
+  execution so the user sees what will happen. But reading the file is async —
+  so <code>renderCall</code> fires off a <code>computeEditPreview()</code> promise
+  and stores <code>previewGeneration</code> to ignore stale results:
+</p>
+
+<pre><code>// In renderCall — the preview is computed asynchronously
+const previewGeneration = (context.state.previewGeneration ?? 0) + 1;
+context.state.previewGeneration = previewGeneration;
+computeEditPreview(previewInput, context.cwd)
+  .then((preview) => {
+    // Only apply if still the latest request
+    if (
+      context.state.argsKey === argsKey &&
+      context.state.previewGeneration === previewGeneration
+    ) {
+      context.state.preview = preview;
+      context.invalidate(); // trigger re-render
+    }
+  });</code></pre>
+
+<div class="callout warn">
+  <strong>Why the generation counter?</strong> If the user types quickly, multiple
+  preview requests could be in flight. Only the <em>last</em> one should win.
+  The counter lets <code>renderCall</code> detect and discard stale responses.
+</div>
+
+<h2>ExtensionApi capabilities used</h2>
+
+<p>
+  The tools use several capabilities from the <code>ExtensionAPI</code>:
+</p>
+
+<ul>
+  <li>
+    <code>pi.registerTool()</code> — the core registration method (all extensions).
+  </li>
+  <li>
+    <code>pi.events.emit()</code> — fires <code>"hashline:read-snapshot"</code>
+    after reads so the insert tool can pick up anchors even without calling read itself
+    (<code>insert.ts → registerInsertTool</code>).
+  </li>
+  <li>
+    <code>pi.events.on()</code> — listens for <code>"hashline:read-snapshot"</code>
+    and <code>"hashline:edit-applied"</code> events (insert and undo).
+  </li>
+  <li>
+    <code>pi.on("session_start", ...)</code> — debug notification when
+    <code>PI_HASHLINE_DEBUG=1</code> (core.ts).
+  </li>
+</ul>
+
+<h2>The separation of concerns</h2>
+
+<div class="diagram">
+<span style="color:var(--accent);font-weight:700">extensions/</span>          <span style="color:var(--muted)">wiring layer</span>
+  │   default export(pi) → calls registerXxxTool(pi)
+  │
+<span style="color:var(--accent);font-weight:700">src/*.ts</span>              <span style="color:var(--muted)">implementation</span>
+  │   registerReadTool(pi)     — constructs ToolDefinition, calls pi.registerTool()
+  │   registerEditTool(pi)     — constructs ToolDefinition, calls pi.registerTool()
+  │   registerInsertTool(pi)   — constructs ToolDefinition, calls pi.registerTool()
+  │
+  │   Each register function:
+  │     • Reads prompt text from tool-descriptions/
+  │     • Defines TypeBox parameter schema
+  │     • Implements renderCall / renderResult / execute
+  │     • Calls pi.registerTool()
+  │
+<span style="color:var(--accent);font-weight:700">tool-descriptions/</span>    <span style="color:var(--muted)">prompt text (markdown)</span>
+      read.md, edit.md, insert.md, ...
+</div>
+
+<h2>Why register functions live in src/ not extensions/</h2>
+
+<p>
+  The <code>registerXxxTool</code> functions contain substantial logic:
+  schema definitions, render callbacks, and the <code>execute</code> handler.
+  Keeping them in <code>src/</code> means:
+</p>
+
+<ul>
+  <li>
+    <strong>Testability</strong> — <code>src/</code> modules can be imported
+    by tests directly, without going through the Pi runtime.
+  </li>
+  <li>
+    <strong>Single responsibility</strong> — <code>extensions/core.ts</code>
+    just wires; <code>src/edit.ts</code> owns the edit tool definition end-to-end.
+  </li>
+  <li>
+    <strong>No duplication</strong> — if two extensions needed the same tool
+    (unlikely here), the registration could be called from both without copy-paste.
+  </li>
+</ul>
+
+<h2>Compatibility mode</h2>
+
+<p>
+  The edit tool supports a <strong>legacy compatibility mode</strong> controlled by
+  <code>PI_HASHLINE_EDIT_COMPAT=1</code>. When enabled, the schema changes from
+  <code>{ path, edits: [...] }</code> to also accept <code>oldText</code> /
+  <code>newText</code> fields from the traditional string-matching edit approach.
+  This is handled by swapping the schema at registration time:
+</p>
+
+<pre><code>export function getHashlineEditToolSchema(): typeof hashlineEditToolSchema {
+  return isLegacyEditCompatEnabled()
+    ? legacyHashlineEditToolSchema
+    : hashlineEditToolSchema;
+}
+
+// In registerEditTool:
+editToolDefinition.parameters = getHashlineEditToolSchema();
+pi.registerTool(editToolDefinition);</code></pre>
+
+<hr>
+
+<h2>Quiz</h2>
+
+<div class="quiz" id="q1">
+  <h3>Question 1</h3>
+  <p class="question">Where does the full description text for the edit tool come from?</p>
+  <label class="option"><input type="radio" name="q1" value="a"> A. Hardcoded as a string in src/edit.ts</label>
+  <label class="option"><input type="radio" name="q1" value="b"> B. Loaded from tool-descriptions/edit.md at module load time</label>
+  <label class="option"><input type="radio" name="q1" value="c"> C. Generated by the Pi runtime from the TypeBox schema descriptions</label>
+  <label class="option"><input type="radio" name="q1" value="d"> D. Loaded from extensions/core.ts</label>
+  <div class="feedback" id="q1-feedback"></div>
+</div>
+
+<div class="quiz" id="q2">
+  <h3>Question 2</h3>
+  <p class="question">Why does renderCall use a previewGeneration counter?</p>
+  <label class="option"><input type="radio" name="q2" value="a"> A. To limit how many previews can be shown per session</label>
+  <label class="option"><input type="radio" name="q2" value="b"> B. To discard stale async preview results when the user types quickly</label>
+  <label class="option"><input type="radio" name="q2" value="c"> C. To count how many times the edit tool has been called</label>
+  <label class="option"><input type="radio" name="q2" value="d"> D. To ensure previews are only computed once</label>
+  <div class="feedback" id="q2-feedback"></div>
+</div>
+
+<div class="quiz" id="q3">
+  <h3>Question 3</h3>
+  <p class="question">What is the primary role of the extensions/*.ts files?</p>
+  <label class="option"><input type="radio" name="q3" value="a"> A. They contain the full implementation of each tool</label>
+  <label class="option"><input type="radio" name="q3" value="b"> B. They define the TypeBox schemas for parameter validation</label>
+  <label class="option"><input type="radio" name="q3" value="c"> C. They are thin wiring layers that import register functions from src/ and call them</label>
+  <label class="option"><input type="radio" name="q3" value="d"> D. They generate the tool-descriptions/ markdown files</label>
+  <div class="feedback" id="q3-feedback"></div>
+</div>
+
+<script>
+(function() {
+  const quizzes = {
+    q1: {
+      answer: "b",
+      correct: "Correct. The description is loaded synchronously from tool-descriptions/edit.md using readFileSync and new URL(\"...\", import.meta.url) — at module load time, not at execution time.",
+      incorrect: "Not quite. The description comes from the tool-descriptions/ directory, loaded via readFileSync at module initialization time in src/edit.ts."
+    },
+    q2: {
+      answer: "b",
+      correct: "Correct. Async preview requests can overlap if the user types quickly. The generation counter ensures only the latest request's result is displayed — stale ones are discarded.",
+      incorrect: "Not quite. The counter prevents stale async preview results — when the user types rapidly, only the most recent preview is applied via context.invalidate()."
+    },
+    q3: {
+      answer: "c",
+      correct: "Correct. extensions/core.ts just imports registerReadTool and registerEditTool from src/ and calls them. The real logic — schemas, render callbacks, execute handlers — all lives in src/.",
+      incorrect: "Not quite. The extensions/ files are thin wrappers. The implementation lives in src/ — extensions/ just import and call the register functions."
+    }
+  };
+
+  Object.entries(quizzes).forEach(([id, q]) => {
+    const container = document.getElementById(id);
+    if (!container) return;
+    const feedback = document.getElementById(id + "-feedback");
+    container.querySelectorAll("input").forEach(input => {
+      input.addEventListener("change", () => {
+        if (input.checked) {
+          if (input.value === q.answer) {
+            feedback.className = "feedback correct";
+            feedback.textContent = "✓ " + q.correct;
+          } else {
+            feedback.className = "feedback incorrect";
+            feedback.textContent = "✗ " + q.incorrect;
+          }
+        }
+      });
+    });
+  });
+})();
+</script>
+
+<div class="footer">
+  <p><strong>Primary source:</strong> <a href="../../extensions/core.ts">extensions/core.ts</a>, <a href="../../extensions/insert.ts">extensions/insert.ts</a>, <a href="../../src/edit.ts">src/edit.ts</a> (registerEditTool, renderCall, renderResult)</p>
+  <p><strong>Next:</strong> <em>Lesson 0004 — Atomic Writes &amp; File Safety (fs-write.ts)</em></p>
+  <p class="print-only">Ask followup questions: the agent can clarify any part of tool registration, prompt loading, or the render lifecycle.</p>
+</div>
+
+</body>
+</html>

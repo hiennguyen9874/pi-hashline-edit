@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>0001 — The Hashline Anchor System</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<nav class="breadcrumb">
+  <a href="../MISSION.md">Mission</a> →
+  Lesson 0001
+</nav>
+
+<h1>0001 — The Hashline Anchor System</h1>
+<p class="subtitle">Why LINE#HASH│content, and how the anchors survive edits</p>
+
+<h2>The problem: line numbers rot</h2>
+
+<p>
+Most editing tools reference lines by number: “replace line 42” or “delete lines 10–15.”
+This works fine for a human sitting at an editor — but an LLM issuing an edit
+<em>cannot know</em> whether the file has changed since it last read it. Another tool call,
+another agent, or even a background process might have shifted every line by the time
+the edit executes.
+</p>
+
+<p>
+The hashline protocol solves this with <strong>content-addressed anchors</strong>.
+Instead of line 42, the model says “replace the line with hash <code>aB3</code>.”
+The hash is computed from the line’s <em>content</em> — and its neighbors — so it stays
+valid even if the line moves up or down.
+</p>
+
+<div class="callout">
+  <strong>Key insight:</strong> Anchors are stable under line insertions/deletions.
+  If someone adds 5 lines above line 42, a line-number reference breaks; a hash anchor
+  still finds the right line because the hash hasn’t changed.
+</div>
+
+<h2>How a hash is computed</h2>
+
+<p>
+Each hash is exactly <strong>3 characters</strong> from a base64url alphabet:
+<code>A–Z a–z 0–9 - _</code>. That’s 64³ = 262,144 possible values.
+</p>
+
+<p>
+The hash is <strong>context-aware</strong>: it’s computed from the line itself
+<em>and both its neighbors</em> (prev, curr, next). This prevents unrelated lines
+from accidentally sharing the same hash, which would make anchors ambiguous.
+</p>
+
+<div class="diagram">
+<span style="color:var(--muted)">// src/hash-format.ts — the core hash function</span>
+function computeLineHashFromContext(prev, curr, next, retry = 0) {
+  const canonical = `${prev}\0${curr}\0${next}`;
+  const input = retry === 0 ? canonical : `${canonical}\0R${retry}`;
+  return hashToString(xxhash.h32(input, 0) >>> 0);
+}
+</div>
+
+<p>
+Three details matter here:
+</p>
+
+<ol>
+  <li>
+    <strong>Context anchoring.</strong> Hashing <code>prev\0curr\0next</code> ties the
+    anchor to its <em>neighborhood</em>. Two identical lines in different contexts get
+    different hashes. This is why the protocol can distinguish nearly-identical lines
+    in a file full of <code>}</code> and <code>return;</code>.
+  </li>
+  <li>
+    <strong>Collision resolution.</strong> The <code>retry</code> parameter exists because
+    even with context, hash collisions can happen within a single file. When computing the
+    full hash array for a file, <code>computeLineHashes</code> in
+    <a href="../../src/hash-format.ts">hash-format.ts</a> retries with incrementing
+    suffixes (<code>:R1</code>, <code>:R2</code>, …) until every hash is unique
+    <em>within that file</em>.
+  </li>
+  <li>
+    <strong>One perfect hash array per file.</strong> The file has exactly one canonical
+    hash array, computed by <code>buildHashlineFile()</code> in
+    <a href="../../src/hashline.ts">hashline.ts</a>. Every tool (read, edit, insert) uses
+    this same computation — hashes are never recomputed differently per call site.
+  </li>
+</ol>
+
+<h2>The display format</h2>
+
+<p>When you call <code>read</code>, each line appears as:</p>
+
+<div class="diagram">
+ <span style="color:var(--muted)">42</span>#<span style="color:var(--accent);font-weight:700">aB3</span>│<span>import { foo } from './lib';</span>
+</div>
+
+<p>The parts:</p>
+<ul>
+  <li><strong>42</strong> — a display-only line number, for navigation with <code>offset</code>/<code>limit</code>.</li>
+  <li><strong>#</strong> — the anchor separator (<code>ANCHOR_SEP</code> in <a href="../../src/anchor-display.ts">anchor-display.ts</a>).</li>
+  <li><strong>aB3</strong> — the 3-character content hash. <em>This</em> is what you copy into <code>edit</code> or <code>insert</code>.</li>
+  <li><strong>│</strong> — the content separator (<code>CONTENT_SEP</code>).</li>
+</ul>
+
+<div class="callout warn">
+  <strong>Critical rule:</strong> Line-qualified anchors (<code>42#aB3</code>) are
+  <strong>rejected</strong> by <code>edit</code> and <code>insert</code>. Copy only the
+  3-character hash. The line number is display-only — including it triggers
+  <code>[E_BAD_REF]</code> from <code>diagnoseLineRef()</code> in
+  <a href="../../src/hashline.ts">hashline.ts</a>.
+</div>
+
+<h2>Anchor resolution: three tiers</h2>
+
+<p>
+When an edit arrives with hash anchors, the runtime doesn’t just look up the hash
+and call it done. It uses a 3-tier resolution strategy in
+<a href="../../src/mutation.ts">mutation.ts</a>:
+</p>
+
+<ol>
+  <li>
+    <strong>Tier 1 — Exact match</strong> (<code>partitionExact</code>):
+    The hash resolves uniquely in the current file, and the anchor’s optional line
+    position hasn’t moved. Fast path.
+  </li>
+  <li>
+    <strong>Tier 2 — Fuzzy relocation</strong> (<code>fuzzyMatch</code>):
+    The hash resolves uniquely but at a <em>different</em> line. The file changed
+    since the read. The edit is relocated with a <code>[RELOCATED]</code> warning.
+  </li>
+  <li>
+    <strong>Tier 3 — Three-way merge</strong> (<code>threeWayMerge</code> in
+    <a href="../../src/merge.ts">merge.ts</a>):
+    The hash doesn’t match the current file at all. The runtime checks the
+    <em>snapshot</em> from the last read. If the anchors match the snapshot,
+    it applies edits to the snapshot, diffs old→edited, and applies that diff
+    to the current file. Like <code>git rebase</code>.
+  </li>
+</ol>
+
+<p>
+If <em>none</em> of these work, you get a <code>[E_STALE_ANCHOR]</code> or
+<code>[E_AMBIGUOUS_ANCHOR]</code> error telling you to re-read the file.
+</p>
+
+<h2>Why this design?</h2>
+
+<p>
+The invariant driving all of this is stated in
+<a href="../../AGENTS.md">AGENTS.md</a>:
+</p>
+
+<blockquote>
+  Hashes are computed through one perfect per-file hash array; do not recompute
+  call-site-specific anchors.
+</blockquote>
+
+<p>
+This single-source-of-truth property means that every tool sees the same hashes
+for the same file content. There’s no drift between what <code>read</code> shows
+and what <code>edit</code> accepts. And because hashes are context-aware,
+collision-resolved, and display-only line numbered, the protocol stays robust
+under concurrent edits, paging, and truncation.
+</p>
+
+<hr>
+
+<div class="quiz">
+<h3>Check your understanding</h3>
+
+<div class="question">Q1. If you insert 3 lines at the top of a file, what happens to the hashes of lines below?</div>
+
+<label class="option"><input type="radio" name="q1" value="A" data-correct="true"> A. They stay the same — hashes are content-based, not position-based.</label>
+<label class="option"><input type="radio" name="q1" value="B"> B. They all change because line positions shift.</label>
+<label class="option"><input type="radio" name="q1" value="C"> C. Only the hashes of adjacent lines (directly after the insertion) change.</label>
+
+<div class="feedback" id="q1-correct">✓ Correct! Hashes are computed from content (and neighbors), not position. Inserting lines above doesn't change the content or neighbors of lines below — their hashes remain valid.</div>
+<div class="feedback" id="q1-incorrect">✗ Not quite. Since hashes are computed from line content and its neighbors, inserting lines above doesn't affect lines below. Their content hasn't changed, and their neighbors haven't changed. The hashes stay the same.</div>
+
+<div class="question" style="margin-top:1.5rem">Q2. What does the <code>retry</code> parameter in <code>computeLineHashFromContext</code> do?</div>
+
+<label class="option"><input type="radio" name="q2" value="A"> A. It handles network retries if the hash computation fails.</label>
+<label class="option"><input type="radio" name="q2" value="B"> B. It re-hashes with a different seed when xxHash produces a bad value.</label>
+<label class="option"><input type="radio" name="q2" value="C" data-correct="true"> C. It resolves hash collisions by appending <code>:R1</code>, <code>:R2</code>, etc. to the input until the hash is unique within the file.</label>
+
+<div class="feedback" id="q2-correct">✓ Correct! The retry mechanism ensures every hash in a file is unique by appending disambiguation suffixes when collisions occur.</div>
+<div class="feedback" id="q2-incorrect">✗ Not quite. The retry parameter resolves <em>hash collisions within a single file</em>. If two different lines produce the same 3-char hash, the engine retries with <code>:R1</code>, <code>:R2</code>, etc. appended to the input, changing the hash output until it's unique.</div>
+</div>
+
+<div class="footer">
+  <p>
+    <strong>Primary source:</strong>
+    <a href="../../src/hash-format.ts">src/hash-format.ts</a> and
+    <a href="../../src/hashline.ts">src/hashline.ts</a>
+  </p>
+  <p>
+    <strong>Reference:</strong>
+    <a href="../reference/hashline-protocol.html">Hashline Protocol Reference</a>
+  </p>
+  <p>
+    <strong>Next lesson:</strong>
+    <a href="0002-edit-pipeline.html">0002 — The Edit Pipeline: From Anchor to Atomic Write</a>
+  </p>
+  <p class="print-only">
+    Printed from lesson 0001. Open in browser for interactive quiz.
+  </p>
+  <p>
+    Have questions? Ask your agent — they’re your teacher and can explain anything
+    that’s unclear.
+  </p>
+</div>
+
+<script>
+document.querySelectorAll('.quiz input[type="radio"]').forEach(input => {
+  input.addEventListener('change', () => {
+    const question = input.name;
+    const correct = input.dataset.correct === 'true';
+    const correctId = question + '-correct';
+    const incorrectId = question + '-incorrect';
+    document.getElementById(correctId).className = correct ? 'feedback correct' : 'feedback';
+    document.getElementById(incorrectId).className = correct ? 'feedback' : 'feedback incorrect';
+  });
+});
+</script>
+
+</body>
+</html>

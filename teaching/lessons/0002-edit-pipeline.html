@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>0002 — The Edit Pipeline: From Anchor to Atomic Write</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<nav class="breadcrumb">
+  <a href="../MISSION.md">Mission</a> →
+  <a href="0001-hashline-anchor-system.html">0001: Anchors</a> →
+  Lesson 0002
+</nav>
+
+<h1>0002 — The Edit Pipeline: From Anchor to Atomic Write</h1>
+<p class="subtitle">Tracing a single edit() call through every stage until the bytes hit disk</p>
+
+<h2>The big picture</h2>
+
+<p>
+  An <code>edit()</code> call travels through four major phases. Here they are,
+  with the owning source file for each:
+</p>
+
+<div class="diagram">
+<span style="color:var(--muted)">edit() call arrives</span>
+  │
+  ├─ <span style="color:var(--accent);font-weight:700">1. Validate &amp; Normalize</span>    <span style="color:var(--muted)">edit.ts</span>
+  │     assertEditRequest() → normalizeEditItems()
+  │
+  ├─ <span style="color:var(--accent);font-weight:700">2. Resolve &amp; Apply</span>         <span style="color:var(--muted)">mutation.ts</span>
+  │     applyMutation()
+  │     ├── resolveEditTarget()      read + normalize file
+  │     ├── buildHashlineFile()      compute hash array
+  │     ├── resolveEditAnchors()     parse anchor strings
+  │     ├── 3-tier match              exact → fuzzy → merge
+  │     ├── resolveEditSpans()       map to byte-level spans
+  │     └── applySpans()             splice content
+  │
+  ├─ <span style="color:var(--accent);font-weight:700">3. Write to Disk</span>           <span style="color:var(--muted)">fs-write.ts</span>
+  │     writeFileAtomically()
+  │
+  └─ <span style="color:var(--accent);font-weight:700">4. Build Response</span>          <span style="color:var(--muted)">edit-response.ts</span>
+        generateDiffString() → text + details
+</div>
+
+<h2>Phase 1: Validate &amp; Normalize</h2>
+
+<p>
+  Before touching the file, the edit tool validates the request shape.
+  <code>assertEditRequest()</code> in <a href="../../src/edit.ts">edit.ts</a>
+  checks that <code>path</code> is a non-empty string and <code>edits</code> is a
+  non-empty array, with each entry having non-empty <code>start</code> and
+  <code>end</code> strings and a <code>lines</code> array.
+</p>
+
+<p>
+  Then <code>normalizeEditItems()</code> converts the raw JSON into typed
+  <code>HashlineToolEdit[]</code> objects — each with <code>op: "replace"</code>,
+  a <code>pos</code> (the start hash), <code>end</code>, and <code>lines</code>:
+</p>
+
+<div class="diagram">
+<span style="color:var(--muted)">// Raw JSON from the model:</span>
+{ start: "aB3", end: "aB3", lines: ["new content"] }
+
+<span style="color:var(--muted)">// → normalizeEditItems() produces:</span>
+{ op: "replace", pos: "aB3", end: "aB3", lines: ["new content"] }
+</div>
+
+<h2>Phase 2: Resolve &amp; Apply (the engine room)</h2>
+
+<p>
+  <code>applyMutation()</code> in <a href="../../src/mutation.ts">mutation.ts</a>
+  is the heart of the system. It orchestrates every step from file reading through
+  span application. Let’s trace through each sub-step.
+</p>
+
+<h3>2a. Read the file</h3>
+
+<p>
+  <code>resolveEditTarget()</code> reads the file, checks it exists and is
+  writable, strips any BOM, normalizes CRLF→LF, and verifies it’s not a binary
+  or directory. The result is a normalized string plus the original line ending
+  and BOM — preserved for round-trip fidelity.
+</p>
+
+<h3>2b. Build the hash array</h3>
+
+<p>
+  <code>buildHashlineFile(content)</code> splits the normalized text into visible
+  lines and calls <code>computeLineHashes()</code> to produce the single canonical
+  hash array. It also precomputes <code>lineStarts[]</code> — byte offsets for
+  each line — which is critical for the span computation later.
+</p>
+
+<h3>2c. Resolve anchor strings into positioned edits</h3>
+
+<p>
+  <code>resolveEditAnchors(toolEdits, currentFile)</code> in
+  <a href="../../src/hashline.ts">hashline.ts</a> does two things:
+</p>
+
+<ol>
+  <li>
+    <strong>Parse anchor references.</strong> Each <code>pos</code>/<code>end</code>
+    string is validated against <code>HASH_RE</code> (exactly 3 base64url chars).
+    Anything else — line numbers, content, separators — triggers
+    <code>diagnoseLineRef()</code> which returns a specific error message.
+  </li>
+  <li>
+    <strong>Normalize lines.</strong>
+    <code>hashlineParseText()</code> converts the model’s <code>lines</code>
+    (which may arrive as a string or array) into a clean string array. Crucially,
+    it also calls <code>assertNoDisplayPrefixes()</code> — rejecting any line
+    that starts with a hashline prefix like <code>aB3│content</code>. The model
+    must send literal content, not rendered read output.
+  </li>
+</ol>
+
+<div class="callout warn">
+  <strong>Architecture guardrail:</strong> <a href="../../AGENTS.md">AGENTS.md</a>
+  states: “Do not introduce autocorrection heuristics into applyHashlineEdits.
+  The runtime must not silently patch model errors.” If the model sends a hashline
+  prefix, the edit is <em>rejected</em>, not silently stripped.
+</div>
+
+<h3>2d. Match anchors to live lines</h3>
+
+<p>
+  You already learned the 3-tier resolution from lesson 0001. Here’s how it fits
+  in the pipeline:
+</p>
+
+<ol>
+  <li><strong>partitionExact</strong> — tries to resolve each anchor uniquely in the current file.</li>
+  <li><strong>fuzzyMatch</strong> — for anchors that didn’t match, tries hash-only relocation with a <code>[RELOCATED]</code> warning.</li>
+  <li><strong>threeWayMerge</strong> — if anchors still don’t match, checks the snapshot from the last read. If they match <em>there</em>, rebases the edit onto current content.</li>
+</ol>
+
+<p>
+  At the end, every edit either has a known line position — or the whole request
+  fails with a <code>[E_STALE_ANCHOR]</code> or <code>[E_AMBIGUOUS_ANCHOR]</code>
+  error.
+</p>
+
+<h3>2e. Resolve edits into byte-level spans</h3>
+
+<p>
+  <code>resolveEditSpans(file, edits)</code> is where the abstract edit operations
+  become concrete byte-level instructions. For each edit it produces an
+  <code>EditSpan</code>:
+</p>
+
+<div class="diagram">
+<span style="color:var(--muted)">// EditSpan — the byte-level instruction:</span>
+{
+  index: 0,              <span style="color:var(--muted)">// which edit in the request</span>
+  label: "replace aB3",  <span style="color:var(--muted)">// human-readable label</span>
+  start: 247,            <span style="color:var(--muted)">// byte offset where replacement begins</span>
+  end: 268,              <span style="color:var(--muted)">// byte offset where replacement ends</span>
+  replacement: "new\nlines", <span style="color:var(--muted)">// the spliced-in content</span>
+  op: "replace",         <span style="color:var(--muted)">// operation type</span>
+  lineShiftStart: 14,    <span style="color:var(--muted)">// line where shifts begin (for downstream spans)</span>
+  lineDelta: 1           <span style="color:var(--muted)">// net line count change (±)</span>
+}
+</div>
+
+<p>
+  <strong>How start/end byte offsets are computed:</strong> The precomputed
+  <code>lineStarts[]</code> array from <code>buildHashlineFile()</code> maps
+  line numbers to byte positions. Given a resolved line <em>n</em>:
+</p>
+
+<ul>
+  <li><strong>Single-line replace:</strong>
+    <code>start = lineStarts[n-1]</code> (first byte of line <em>n</em>),
+    <code>end = lineStarts[n-1] + lines[n-1].length</code> (last byte of line <em>n</em>).
+  </li>
+  <li><strong>Multi-line replace:</strong>
+    <code>start</code> at first byte of the first line,
+    <code>end</code> at last byte of the last line.
+    The newline between lines <em>n</em> and <em>n+1</em> is included in the deleted range.
+  </li>
+  <li><strong>Delete (lines = []):</strong> Same as replace but <code>replacement = ""</code>.
+    Special case: if deleting the last line, <code>start</code> is nudged back one byte to
+    also consume the preceding newline.
+  </li>
+</ul>
+
+<p>
+  <strong>Append and prepend</strong> work differently — they insert pure content
+  without deleting anything. Their spans have <code>start === end</code> (zero-length
+  range) and the replacement includes the necessary newline:
+</p>
+
+<div class="diagram">
+<span style="color:var(--muted)">// Append after line N:</span>
+start = lineStarts[N]                      <span style="color:var(--muted)">// right after line N's \n</span>
+end   = lineStarts[N]                      <span style="color:var(--muted)">// zero-length</span>
+replacement = "new line\n"                 <span style="color:var(--muted)">// includes trailing \n</span>
+
+<span style="color:var(--muted)">// Prepend before line N:</span>
+start = lineStarts[N-1]                    <span style="color:var(--muted)">// first byte of line N</span>
+end   = lineStarts[N-1]                    <span style="color:var(--muted)">// zero-length</span>
+replacement = "new line\n"                 <span style="color:var(--muted)">// push line N down with trailing \n</span>
+</div>
+
+<div class="callout">
+  <strong>Insert head/tail</strong> are handled even more simply: their spans
+  target byte 0 or byte <code>content.length</code> with a zero-length range.
+</div>
+
+<h3>Detecting problems during span resolution</h3>
+
+<p>
+  <code>resolveEditSpans</code> doesn’t just compute spans — it also detects
+  several important edge cases:
+</p>
+
+<ul>
+  <li>
+    <strong>Noop detection.</strong> If the replacement text exactly matches the
+    original lines, the edit is classified as a noop and excluded from spans.
+    The response reports <code>Classification: noop</code> and no file write occurs.
+  </li>
+  <li>
+    <strong>Boundary duplication warnings.</strong> If the replacement’s first line
+    matches the <em>preceding</em> surviving line (or the last line matches the
+    <em>next</em> surviving line), a warning is emitted. This catches cases where
+    the model accidentally duplicates a line that’s about to survive the edit.
+  </li>
+  <li>
+    <strong>Overlap detection.</strong> If two edits in the same request touch
+    overlapping byte ranges, the entire request is rejected with
+    <code>[E_EDIT_CONFLICT]</code>. The model must merge them first.
+  </li>
+  <li>
+    <strong>Current mismatch.</strong> If the model supplies <code>current</code>
+    and it doesn’t match the live line, the edit is rejected with
+    <code>[E_CURRENT_MISMATCH]</code>.
+  </li>
+</ul>
+
+<h3>2f. Apply spans to content</h3>
+
+<p>
+  <code>applySpans(file, spans)</code> is deceptively simple. It takes the spans,
+  sorts them in <strong>reverse-end order</strong> (processing from the end of the
+  file toward the beginning), and splices each replacement into the content string:
+</p>
+
+<div class="diagram">
+<span style="color:var(--muted)">// src/hashline.ts — applySpans</span>
+const orderedSpans = [...spans].sort((left, right) => {
+  if (right.end !== left.end) return right.end - left.end;
+  return left.index - right.index;
+});
+
+let result = file.content;
+for (const span of orderedSpans) {
+  result = result.slice(0, span.start) + span.replacement + result.slice(span.end);
+}
+</div>
+
+<p>
+  <strong>Why reverse-end order?</strong> It keeps byte offsets stable.
+  If you edit from the top first, every downstream span’s offsets become invalid
+  because the text shifts. By editing from the bottom up, each span’s
+  <code>start</code>/<code>end</code> still indexes into the <em>original</em>
+  content — no recalculation needed.
+</p>
+
+<h2>Phase 3: Atomic Write</h2>
+
+<p>
+  <code>writeFileAtomically()</code> in <a href="../../src/fs-write.ts">fs-write.ts</a>
+  implements three safety guarantees:
+</p>
+
+<ol>
+  <li>
+    <strong>Symlink-safe path resolution.</strong>
+    <code>resolveMutationTargetPath()</code> walks the path component-by-component,
+    resolving symlinks. Handles <code>ELOOP</code> (symlink cycles) and partial
+    existence (some parts of the path may not exist yet).
+  </li>
+  <li>
+    <strong>Hardlink detection.</strong> If the target file has <code>nlink > 1</code>
+    (multiple hardlinks pointing to the same inode), the atomic write strategy is
+    skipped — writing through the temp-file + rename would break the hardlink.
+    Instead, the file is overwritten in-place.
+  </li>
+  <li>
+    <strong>Temp-file + rename.</strong> For normal files: write to
+    <code>.tmp-&lt;uuid&gt;</code> with <code>flag: "wx"</code> (exclusive create
+    — fails if the temp already exists), preserving the original <code>mode</code>.
+    Then <code>rename(temp, target)</code>. On POSIX systems, <code>rename()</code>
+    is atomic: any reader sees either the complete old file or the complete new file,
+    never a partial write.
+  </li>
+</ol>
+
+<div class="callout">
+  <strong>Why this matters:</strong> Without atomic writes, a crash or concurrent
+  reader could see a half-written file. The temp + rename strategy guarantees that
+  the file contents are always complete and consistent.
+</div>
+
+<h2>Phase 4: Build Response</h2>
+
+<p>
+  After the write succeeds, <code>buildChangedResponse()</code> in
+  <a href="../../src/edit-response.ts">edit-response.ts</a> produces the output
+  the model sees. It does two things in parallel:
+</p>
+
+<ul>
+  <li>
+    <strong>Model-visible text:</strong> A compact summary — “Applied changes to
+    path”, optionally “Fresh anchors for follow-up edits” (up to 12 anchor+content
+    pairs from the diff), and any warnings.
+  </li>
+  <li>
+    <strong>Host-only details:</strong> The full unified diff (with hashline
+    anchors on + and context lines, using the <em>new</em> file’s hash array),
+    snapshot ID, and metrics (lines added/removed, noop count, warnings count).
+    These are rendered by the UI shell but are <em>not</em> part of the model’s
+    context window — saving tokens while giving the human a rich diff view.
+  </li>
+</ul>
+
+<h2>Putting it all together</h2>
+
+<p>
+  Here’s the complete trace of a single-line edit, annotated with the exact
+  source locations:
+</p>
+
+<div class="diagram" style="font-size:0.8rem;line-height:1.4">
+<span style="color:var(--muted)">edit({ path: "src/main.ts", edits: [{ start: "aB3", end: "aB3", lines: ["fixed"] }] })</span>
+
+<span style="color:var(--muted)">1.</span> assertEditRequest()         <span style="color:var(--muted)">edit.ts: confirms path/edits shape</span>
+<span style="color:var(--muted)">2.</span> normalizeEditItems()        <span style="color:var(--muted)">edit.ts: → [{ op:"replace", pos:"aB3", end:"aB3", lines:["fixed"] }]</span>
+<span style="color:var(--muted)">3.</span> applyMutation()             <span style="color:var(--muted)">mutation.ts: enters file mutation queue</span>
+<span style="color:var(--muted)">  a.</span> resolveEditTarget()      <span style="color:var(--muted)">edit.ts: → normalized "import { foo }\n..."</span>
+<span style="color:var(--muted)">  b.</span> buildHashlineFile()      <span style="color:var(--muted)">hashline.ts: → { lines, lineHashes, lineStarts, content }</span>
+<span style="color:var(--muted)">  c.</span> resolveEditAnchors()     <span style="color:var(--muted)">hashline.ts: → [{ op:"replace", pos:{hash:"aB3"}, lines:["fixed"] }]</span>
+<span style="color:var(--muted)">  d.</span> partitionExact()         <span style="color:var(--muted)">fuzzy-match.ts: aB3 → line 3 in current file ✓</span>
+<span style="color:var(--muted)">  e.</span> resolveEditSpans()       <span style="color:var(--muted)">hashline.ts: → [{ start:42, end:55, replacement:"fixed", op:"replace" }]</span>
+<span style="color:var(--muted)">  f.</span> applySpans()             <span style="color:var(--muted)">hashline.ts: result = "...".slice(0,42) + "fixed" + "...".slice(55)</span>
+<span style="color:var(--muted)">4.</span> writeFileAtomically()       <span style="color:var(--muted)">fs-write.ts: tmp file → rename to target</span>
+<span style="color:var(--muted)">5.</span> buildChangedResponse()      <span style="color:var(--muted)">edit-response.ts: "Applied changes to src/main.ts\n..."</span>
+</div>
+
+<hr>
+
+<div class="quiz">
+<h3>Check your understanding</h3>
+
+<div class="question">Q1. Why are spans applied in reverse-end order?</div>
+
+<label class="option"><input type="radio" name="q1" value="A"> A. It's faster because the file is processed right-to-left.</label>
+<label class="option"><input type="radio" name="q1" value="B"> B. It produces cleaner diffs.</label>
+<label class="option"><input type="radio" name="q1" value="C" data-correct="true"> C. Reverse-end order keeps byte offsets stable — each span still indexes into the original content, so no recalculation is needed.</label>
+<label class="option"><input type="radio" name="q1" value="D"> D. It prevents conflicts with the 3-way merge step.</label>
+
+<div class="feedback" id="q1-correct">✓ Correct! By processing spans from the end of the file first, earlier spans' byte offsets remain valid because the text after them hasn't been modified yet.</div>
+<div class="feedback" id="q1-incorrect">✗ Not quite. The reason is about keeping byte offsets valid. Since spans are computed against the <em>original</em> file content, editing from the bottom up means each span's start/end offsets still point to the right bytes — the text hasn't shifted yet.</div>
+
+<div class="question" style="margin-top:1.5rem">Q2. What happens when two edits in the same call touch overlapping line ranges?</div>
+
+<label class="option"><input type="radio" name="q2" value="A"> A. The second edit silently overwrites the first.</label>
+<label class="option"><input type="radio" name="q2" value="B"> B. They are merged automatically.</label>
+<label class="option"><input type="radio" name="q2" value="C" data-correct="true"> C. The entire request is rejected with [E_EDIT_CONFLICT].</label>
+<label class="option"><input type="radio" name="q2" value="D"> D. The overlapping region is applied, non-overlapping parts are dropped.</label>
+
+<div class="feedback" id="q2-correct">✓ Correct! resolveEditSpans detects overlapping byte ranges and rejects the whole request. The model must merge the edits into one non-overlapping change or split them into separate requests.</div>
+<div class="feedback" id="q2-incorrect">✗ Not quite. The system explicitly checks for overlaps and rejects the request with [E_EDIT_CONFLICT]. The philosophy is: don't silently resolve ambiguity — make the model fix it.</div>
+
+<div class="question" style="margin-top:1.5rem">Q3. Why does writeFileAtomically fall back to in-place write for hardlinked files?</div>
+
+<label class="option"><input type="radio" name="q3" value="A"> A. Hardlinks can't be renamed on Linux.</label>
+<label class="option"><input type="radio" name="q3" value="B"> B. The temp file would have a different inode, breaking the hardlink relationship.</label>
+<label class="option"><input type="radio" name="q3" value="C" data-correct="true"> C. rename() replaces the directory entry — the other hardlinks would still point to the old inode, so the "edit" would only affect one link.</label>
+<label class="option"><input type="radio" name="q3" value="D"> D. Hardlinked files can't be opened with write permissions.</label>
+
+<div class="feedback" id="q3-correct">✓ Correct! With a hardlink, rename() replaces only one directory entry. The other hardlinks would still point to the old (unedited) inode — so the file would appear unchanged from those paths. In-place write keeps all hardlinks pointing to the same data.</div>
+<div class="feedback" id="q3-incorrect">✗ Not quite. The issue is that rename() replaces a single directory entry. If the file has multiple hardlinks, the other links would still reference the old inode with the original content — making the edit appear to have no effect from those paths.</div>
+</div>
+
+<div class="footer">
+  <p>
+    <strong>Primary sources:</strong>
+    <a href="../../src/mutation.ts">src/mutation.ts</a>,
+    <a href="../../src/hashline.ts">src/hashline.ts</a>,
+    <a href="../../src/fs-write.ts">src/fs-write.ts</a>,
+    <a href="../../src/edit-response.ts">src/edit-response.ts</a>
+  </p>
+  <p>
+    <strong>Previous lesson:</strong>
+    <a href="0001-hashline-anchor-system.html">0001 — The Hashline Anchor System</a>
+  </p>
+  <p>
+    <strong>Next lesson:</strong>
+    <a href="0003-tool-architecture.html">0003 — Tool Registration &amp; Architecture</a>
+  </p>
+  <p class="print-only">
+    Printed from lesson 0002. Open in browser for interactive quiz.
+  </p>
+  <p>
+    Have questions about the pipeline? Ask your agent — they can trace any
+    specific path through the code for you.
+  </p>
+</div>
+
+<script>
+document.querySelectorAll('.quiz input[type="radio"]').forEach(input => {
+  input.addEventListener('change', () => {
+    const question = input.name;
+    const correct = input.dataset.correct === 'true';
+    const correctId = question + '-correct';
+    const incorrectId = question + '-incorrect';
+    document.getElementById(correctId).className = correct ? 'feedback correct' : 'feedback';
+    document.getElementById(incorrectId).className = correct ? 'feedback' : 'feedback incorrect';
+  });
+});
+</script>
+
+</body>
+</html>

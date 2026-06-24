@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hashline Protocol Reference</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<h1>Hashline Protocol Reference</h1>
+<p class="subtitle">Cheat sheet for the LINE#HASH│content protocol</p>
+
+<h2>Display format</h2>
+
+<pre><span style="color:var(--muted)">LINE</span><span style="color:var(--accent)">#</span><span style="color:var(--accent);font-weight:700">HASH</span>│content</pre>
+
+<table style="width:100%;border-collapse:collapse;margin:1rem 0">
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.5rem 0;font-weight:600">LINE</td>
+  <td style="padding:0.5rem 0">Display-only line number. Used for <code>offset</code>/<code>limit</code> navigation. <strong>Never</strong> included in edit/insert anchors.</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.5rem 0;font-weight:600">#</td>
+  <td style="padding:0.5rem 0">Anchor separator (<code>ANCHOR_SEP</code>).</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.5rem 0;font-weight:600">HASH</td>
+  <td style="padding:0.5rem 0"><strong>3 characters</strong> from <code>A-Z a-z 0-9 - _</code>. Content-addressed, context-aware. Copy this into edit/insert.</td>
+</tr>
+<tr>
+  <td style="padding:0.5rem 0;font-weight:600">│</td>
+  <td style="padding:0.5rem 0">Content separator (<code>CONTENT_SEP</code>, U+2502).</td>
+</tr>
+</table>
+
+<h2>Hash alphabet</h2>
+
+<pre>A-Z a-z 0-9 - _  (64 chars = 6 bits/char × 3 chars = 18 bits = 262,144 values)</pre>
+
+<h2>Hash computation</h2>
+
+<pre>hash = xxHash32(prev + "\0" + curr + "\0" + next  [+ ":R" + retry], seed=0)
+       → extract top 18 bits → encode in base64url</pre>
+
+<p><strong>Context:</strong> prev and next lines are included so identical lines in different positions get different hashes (within a 262K value space, collisions are resolved via retry).</p>
+
+<p><strong>Collision resolution:</strong> if a hash collides with another in the same file, retry with <code>:R1</code>, <code>:R2</code>, … until unique.</p>
+
+<h2>Anchor resolution (3 tiers)</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:1rem 0">
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.5rem 0;font-weight:600">Tier 1: Exact</td>
+  <td style="padding:0.5rem 0">Hash matches uniquely in current file, position unchanged. <code>partitionExact()</code></td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.5rem 0;font-weight:600">Tier 2: Fuzzy</td>
+  <td style="padding:0.5rem 0">Hash matches uniquely but at different line. Relocate with <code>[RELOCATED]</code> warning. <code>fuzzyMatch()</code></td>
+</tr>
+<tr>
+  <td style="padding:0.5rem 0;font-weight:600">Tier 3: Merge</td>
+  <td style="padding:0.5rem 0">Hash doesn't match current file. Try snapshot: apply edits to snapshot, diff, apply patch to current. <code>threeWayMerge()</code></td>
+</tr>
+</table>
+
+<h2>Error codes</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:1rem 0">
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.4rem 0;font-family:var(--font-mono);font-size:0.9rem">[E_BAD_REF]</td>
+  <td style="padding:0.4rem 0">Anchor is not a valid 3-character hash (includes line numbers, missing chars, etc.)</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.4rem 0;font-family:var(--font-mono);font-size:0.9rem">[E_STALE_ANCHOR]</td>
+  <td style="padding:0.4rem 0">Hash doesn't exist in the current file (line deleted or heavily modified). Re-read.</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.4rem 0;font-family:var(--font-mono);font-size:0.9rem">[E_AMBIGUOUS_ANCHOR]</td>
+  <td style="padding:0.4rem 0">Hash matches multiple lines. Re-read for fresh anchors.</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.4rem 0;font-family:var(--font-mono);font-size:0.9rem">[E_BARE_HASH_PREFIX]</td>
+  <td style="padding:0.4rem 0">Edit payload contains hashline prefixes (HASH│content). Send literal file content.</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.4rem 0;font-family:var(--font-mono);font-size:0.9rem">[E_CURRENT_MISMATCH]</td>
+  <td style="padding:0.4rem 0">Optional <code>current</code> field doesn't match the live line text.</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.4rem 0;font-family:var(--font-mono);font-size:0.9rem">[E_EDIT_CONFLICT]</td>
+  <td style="padding:0.4rem 0">Two edits in the same request overlap on the same original line range.</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.4rem 0;font-family:var(--font-mono);font-size:0.9rem">[E_WOULD_EMPTY]</td>
+  <td style="padding:0.4rem 0">Edit would delete entire file (>50 lines). Use write tool instead.</td>
+</tr>
+</table>
+
+<h2>Key invariants</h2>
+
+<ul>
+  <li><strong>One perfect hash array per file.</strong> <code>buildHashlineFile()</code> is the single canonical computation.</li>
+  <li><strong>Hash-only anchors.</strong> Mutating tools reject line-qualified anchors. Only the 3-char hash is accepted.</li>
+  <li><strong>No silent fixup.</strong> The runtime rejects malformed input; it never autocorrects model errors.</li>
+  <li><strong>Atomic writes.</strong> All file mutations go through <code>writeFileAtomically()</code> (temp file + rename).</li>
+</ul>
+
+<h2>Key files</h2>
+
+<table style="width:100%;border-collapse:collapse;margin:1rem 0">
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.3rem 0;font-family:var(--font-mono);font-size:0.9rem">src/hash-format.ts</td>
+  <td style="padding:0.3rem 0">Hash computation, collision resolution, alphabet</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.3rem 0;font-family:var(--font-mono);font-size:0.9rem">src/hashline.ts</td>
+  <td style="padding:0.3rem 0">buildHashlineFile, anchor parsing, edit engine</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.3rem 0;font-family:var(--font-mono);font-size:0.9rem">src/anchor-display.ts</td>
+  <td style="padding:0.3rem 0">Display formatting, ANCHOR_SEP, CONTENT_SEP</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.3rem 0;font-family:var(--font-mono);font-size:0.9rem">src/mutation.ts</td>
+  <td style="padding:0.3rem 0">3-tier resolution, applyMutation pipeline</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border)">
+  <td style="padding:0.3rem 0;font-family:var(--font-mono);font-size:0.9rem">src/fuzzy-match.ts</td>
+  <td style="padding:0.3rem 0">partitionExact, fuzzyMatch, relocation warnings</td>
+</tr>
+<tr>
+  <td style="padding:0.3rem 0;font-family:var(--font-mono);font-size:0.9rem">src/merge.ts</td>
+  <td style="padding:0.3rem 0">Three-way merge for stale-anchor recovery</td>
+</tr>
+</table>
+
+<div class="footer">
+  <p>
+    <a href="../lessons/0001-hashline-anchor-system.html">← Lesson 0001: The Hashline Anchor System</a>
+  </p>
+  <p class="print-only">Hashline Protocol Reference — print-friendly cheat sheet.</p>
+</div>
+
+</body>
+</html>

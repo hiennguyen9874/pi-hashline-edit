@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference — Tool Registration API</title>
+<link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+
+<nav class="breadcrumb">
+  <a href="../MISSION.md">Teaching Home</a> →
+  <a href="../lessons/0003-tool-architecture.html">Lesson 0003</a> →
+  Reference
+</nav>
+
+<h1>Tool Registration API — Quick Reference</h1>
+<p class="subtitle">The interface between Pi extensions and the runtime</p>
+
+<h2>Extension entrypoint</h2>
+<pre><code>// extensions/my-tool.ts
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+export default function (pi: ExtensionAPI): void {
+  pi.registerTool({ ... });
+}</code></pre>
+
+<h2>ToolDefinition shape</h2>
+<pre><code>pi.registerTool({
+  name:          string,        // unique id; replaces built-in if same name
+  label:         string,        // UI display name
+  description:   string,        // full description the LLM sees
+  promptSnippet: string,        // one-line summary in tool list
+  promptGuidelines?: string[],  // optional numbered rules (read only)
+  parameters:    TObject,       // TypeBox schema (validates + documents args)
+  renderShell?:  "default" | "self",
+
+  renderCall(args, theme, ctx) → Text,     // live preview
+  renderResult(result, meta, theme, ctx) → Text,  // post-execution rendering
+  async execute(id, params, signal, onUpdate, ctx) → result,
+});</code></pre>
+
+<h2>Prompt text loading pattern</h2>
+<pre><code>import { readFileSync } from "fs";
+
+const DESC = readFileSync(
+  new URL("../tool-descriptions/my-tool.md", import.meta.url),
+  "utf-8",
+)
+  .replaceAll("{{TEMPLATE_VAR}}", actualValue)
+  .trim();</code></pre>
+
+<h2>TypeBox schema pattern</h2>
+<pre><code>import { Type } from "@sinclair/typebox";
+
+const mySchema = Type.Object({
+  path: Type.String({ description: "..." }),
+  items: Type.Array(Type.String(), { description: "..." }),
+}, { additionalProperties: false });</code></pre>
+
+<h2>renderCall signature</h2>
+<pre><code>renderCall(
+  args: unknown,                          // current tool args (may be partial)
+  theme: { bold, fg, ... },               // terminal styling functions
+  context: {
+    state: Record&lt;string, unknown&gt;,       // persists across renders
+    cwd: string,                          // current working directory
+    expanded: boolean,                    // user toggled expand
+    executionStarted: boolean,            // execute() has been called
+    argsComplete: boolean,                // all required args filled
+    lastComponent: Text | undefined,      // reuse or replace
+    invalidate(): void,                   // request re-render
+  }
+) → Text</code></pre>
+
+<h2>renderResult signature</h2>
+<pre><code>renderResult(
+  result: unknown,                        // value returned by execute()
+  meta: { isPartial: boolean },           // isPartial = streaming in progress
+  theme: { fg, ... },
+  context: {
+    state, cwd, expanded,
+    isError: boolean,                     // execute() threw
+    lastComponent: Text | undefined,
+    invalidate(): void,
+  }
+) → Text</code></pre>
+
+<h2>execute signature</h2>
+<pre><code>async execute(
+  _toolCallId: string,                    // unique id for this invocation
+  params: Infer&lt;typeof schema&gt;,          // validated args
+  signal: AbortSignal,                    // cancel if user aborts
+  _onUpdate: (update: unknown) => void,   // stream partial results
+  ctx: ExtensionContext,                  // { cwd, ui, ... }
+) → {
+  content: Array&lt;{ type: "text"; text: string }&gt;,
+  isError?: boolean,
+  details?: any,                           // host-only metadata
+}</code></pre>
+
+<h2>Events API</h2>
+<pre><code>// Emit
+pi.events.emit("hashline:read-snapshot", { path, file, seenLines });
+
+// Listen
+pi.events.on("hashline:read-snapshot", (data) => { ... });
+
+// Session lifecycle
+pi.on("session_start", async (_event, ctx) => { ... });</code></pre>
+
+<h2>File layout conventions</h2>
+<table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+<tr style="border-bottom:1px solid var(--border);">
+  <th style="padding:0.4rem 0.6rem; text-align:left;">Directory</th>
+  <th style="padding:0.4rem 0.6rem; text-align:left;">Purpose</th>
+</tr>
+<tr style="border-bottom:1px solid var(--border);">
+  <td style="padding:0.4rem 0.6rem; font-family:var(--font-mono); font-size:0.85rem;">extensions/*.ts</td>
+  <td style="padding:0.4rem 0.6rem;">Entrypoints: default-export functions that wire src/ to the Pi runtime</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border);">
+  <td style="padding:0.4rem 0.6rem; font-family:var(--font-mono); font-size:0.85rem;">src/*.ts</td>
+  <td style="padding:0.4rem 0.6rem;">Implementation: tool definitions, pipeline logic, utilities</td>
+</tr>
+<tr style="border-bottom:1px solid var(--border);">
+  <td style="padding:0.4rem 0.6rem; font-family:var(--font-mono); font-size:0.85rem;">tool-descriptions/*.md</td>
+  <td style="padding:0.4rem 0.6rem;">LLM-facing prompt text: full descriptions, snippets, guidelines</td>
+</tr>
+</table>
+
+<div class="footer">
+  <p>See lessons <a href="../lessons/0001-hashline-anchor-system.html">0001</a>, <a href="../lessons/0002-edit-pipeline.html">0002</a>, <a href="../lessons/0003-tool-architecture.html">0003</a> for full context.</p>
+</div>
+
+</body>
+</html>
