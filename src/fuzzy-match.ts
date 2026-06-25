@@ -35,7 +35,7 @@ function formatRelocationWarning(relocations: Relocation[]): string {
     ? [`  ... ${relocations.length - shown.length} more relocated range(s)`]
     : [];
   return [
-    `[RELOCATED] ${relocations.length} range(s) relocated via hash matching:`,
+    `[W_RELOCATED] ${relocations.length} range(s) relocated via hash matching:`,
     ...shown,
     ...hidden,
     "Please review the diff carefully.",

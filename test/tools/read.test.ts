@@ -215,7 +215,7 @@ describe("read tool protocol", () => {
       await readTool.execute("r2", { path: "sample.txt" }, undefined, undefined, ctx);
       const result = await readTool.execute("r3", { path: "sample.txt" }, undefined, undefined, ctx);
 
-      expect(result.content[0].text).toContain("REPEATED-CALL WARNING");
+      expect(result.content[0].text).toContain("[W_REPEATED_CALL]");
     });
   });
 

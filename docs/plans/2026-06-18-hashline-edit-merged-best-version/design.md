@@ -236,7 +236,7 @@ Rules:
 Use JerryAZR’s recovery philosophy, adapted to hash-only perfect anchors:
 
 1. **Live unique-anchor resolution:** Recompute the current file’s perfect hash map. If `start` and `end` anchors each exist exactly once and preserve range order, the edit can target those live lines.
-2. **Warned relocation classification:** Compare resolved live positions with the most recent read/grep/diff snapshot when available. If anchors are still present but moved, apply the edit and emit a `[RELOCATED]`-style warning. Hash-only anchors make this a direct unique-anchor lookup, not a line-number fuzzy search.
+2. **Warned relocation classification:** Compare resolved live positions with the most recent read/grep/diff snapshot when available. If anchors are still present but moved, apply the edit and emit a `[W_RELOCATED]` warning. Hash-only anchors make this a direct unique-anchor lookup, not a line-number fuzzy search.
 3. **Snapshot 3-way merge:** If one or more anchors are absent from the live file but match the most recent snapshot, attempt a safe 3-way merge/rebase. Emit a warning when used.
 4. **Reject:** If any edit remains ambiguous, absent without a usable snapshot, reordered unexpectedly, or unsafe, reject the entire request with a stale-anchor error and return fresh nearby anchors when possible.
 

@@ -264,7 +264,7 @@ function maybeWarnSuspiciousUnicodeEscapePlaceholder(
   for (const edit of edits) {
     if (edit.lines.some((line) => /\\uDDDD/i.test(line))) {
       warnings.push(
-        "Detected literal \\uDDDD in edit content; no autocorrection applied. Verify whether this should be a real Unicode escape or plain text.",
+        "[W_SUSPICIOUS_ESCAPE] Detected literal \\uDDDD in edit content; no autocorrection applied. Verify whether this should be a real Unicode escape or plain text.",
       );
     }
   }

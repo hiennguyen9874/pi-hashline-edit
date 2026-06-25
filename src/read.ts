@@ -276,7 +276,7 @@ export function registerReadTool(pi: ExtensionAPI): void {
       // then iconv the file back afterwards. Detect on the full text, not the
       // paged slice, so an out-of-view bad byte still surfaces.
       const previewText = normalized.includes("\uFFFD")
-        ? `${preview.text}\n\n[Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.]`
+        ? `${preview.text}\n\n[W_NON_UTF8] Non-UTF-8 bytes shown as U+FFFD; editing rewrites the file as UTF-8.`
         : preview.text;
 
       const warning = consumeDoomLoopWarning(globalDoomLoopState, _toolCallId);

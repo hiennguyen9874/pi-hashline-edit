@@ -201,7 +201,7 @@ export async function applyMutation(options: MutationOptions): Promise<MutationR
         if (!snapSpans.ok) throw new Error(snapSpans.message);
 
         allWarnings.push(
-          "[MERGED] File changed since last read. Edits were rebased onto the current version. Please review the diff carefully.",
+          "[W_MERGED] File changed since last read. Edits were rebased onto the current version. Please review the diff carefully.",
         );
 
         const currentApplied = applySpans(currentFile, currentSpans.spans);

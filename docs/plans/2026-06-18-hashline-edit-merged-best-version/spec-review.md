@@ -19,7 +19,7 @@ Resolved after implementation updates on 2026-06-18.
 
 - Files: `src/edit.ts`, `src/edit-normalize.ts`, `test/tools/edit.test.ts`
 - Resolution: `hashlineEditToolSchema` now accepts anchored edit requests plus legacy top-level `oldText`/`newText` and `old_text`/`new_text` compatibility shapes.
-- Runtime behavior: legacy requests still normalize through `normalizeEditRequest()` to exact unique hashline edits and emit `[LEGACY_NORMALIZED]`.
+- Runtime behavior: legacy requests still normalize through `normalizeEditRequest()` to exact unique hashline edits and emit `[W_LEGACY_NORMALIZED]`.
 - Coverage: schema validation and registered tool-path legacy normalization are covered in `test/tools/edit.test.ts`.
 
 ### Diff anchors use perfect per-file hashes

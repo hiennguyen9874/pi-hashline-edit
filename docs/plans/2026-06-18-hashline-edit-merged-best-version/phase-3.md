@@ -152,7 +152,7 @@ function resolveUniqueHash(file: HashlineFile, hash: string): number | null {
 }
 ```
 
-For this task, `fuzzyMatch` may call the same unique-hash resolver and emit `[RELOCATED]` only when an incoming edit carried a previous `line` value and the live line differs. Snapshot merge refinement happens in Phase 4.
+For this task, `fuzzyMatch` may call the same unique-hash resolver and emit `[W_RELOCATED]` only when an incoming edit carried a previous `line` value and the live line differs. Snapshot merge refinement happens in Phase 4.
 
 - [ ] **Step 5: Run core hashline tests**
 

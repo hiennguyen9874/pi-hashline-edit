@@ -192,7 +192,7 @@ export function formatDoomLoopMessage(warning: DoomLoopWarning): string {
     const compact = renderCompactStep(warning.toolName, input);
     const suggestions = renderSuggestionBullets([warning.toolName]);
     return [
-      "REPEATED-CALL WARNING: This is the 3rd identical tool call.",
+      "[W_REPEATED_CALL] This is the 3rd identical tool call.",
       compact,
       "",
       "Continuing this pattern will not make progress. Suggestions:",
@@ -203,7 +203,7 @@ export function formatDoomLoopMessage(warning: DoomLoopWarning): string {
   const stepLines = warning.steps.map((step) => renderCompactStep(step.toolName, step.input));
   const suggestions = renderSuggestionBullets(warning.steps.map((step) => step.toolName));
   return [
-    `ALTERNATING-CALL WARNING: You have called this sequence ${warning.steps.length > 0 ? "3 times" : ""}:`.trimEnd(),
+    `[W_ALTERNATING_CALL] You have called this sequence ${warning.steps.length > 0 ? "3 times" : ""}:`.trimEnd(),
     ...stepLines,
     "",
     "Neither call is producing new information. Break the loop with a different approach.",

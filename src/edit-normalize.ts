@@ -120,6 +120,6 @@ export function normalizeEditRequest(input: unknown, currentContent?: string): N
       end: file.lineHashes[endLine - 1]!,
       lines: splitReplacementLines(replacement),
     }],
-    warnings: ["[LEGACY_NORMALIZED] Converted exact unique oldText/newText request to hashline edit. Prefer read + hash anchors."],
+    warnings: ["[W_LEGACY_NORMALIZED] Converted exact unique oldText/newText request to hashline edit. Prefer read + hash anchors."],
   };
 }

@@ -136,7 +136,7 @@
 
 <ol>
   <li><strong>partitionExact</strong> — tries to resolve each anchor uniquely in the current file.</li>
-  <li><strong>fuzzyMatch</strong> — for anchors that didn’t match, tries hash-only relocation with a <code>[RELOCATED]</code> warning.</li>
+  <li><strong>fuzzyMatch</strong> — for anchors that didn’t match, tries hash-only relocation with a <code>[W_RELOCATED]</code> warning.</li>
   <li><strong>threeWayMerge</strong> — if anchors still don’t match, checks the snapshot from the last read. If they match <em>there</em>, rebases the edit onto current content.</li>
 </ol>
 

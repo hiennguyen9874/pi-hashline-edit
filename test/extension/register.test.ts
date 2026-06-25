@@ -44,20 +44,19 @@ describe("extension registration", () => {
     const readTool = collectToolDefinitions(registerCore).find((tool) => tool.name === "read");
 
     expect(readTool?.promptGuidelines).toContain(
-      "Use the tool schemas as the source of truth for exact parameters and call shapes.",
-    );
-    expect(readTool?.promptGuidelines).toContain("Use `read` for file inspection.");
-    expect(readTool?.promptGuidelines).toContain(
-      "Use `edit` for replacing or deleting existing text.",
+      "Available tools are provided by the runtime. Use the tool schemas as the source of truth for exact parameters and call shapes.",
     );
     expect(readTool?.promptGuidelines).toContain(
-      "Before editing or inserting, use fresh anchors from the latest relevant tool output; do not guess anchors or act on stale context.",
+      "Before editing or inserting, use fresh anchors from the latest relevant tool output: `read`, enabled `grep`, or fresh anchors returned by successful `edit`/`insert`; do not guess anchors or act on stale context.",
     );
     expect(readTool?.promptGuidelines).toContain(
       "Preserve user-provided spelling and wording unless correction is explicitly requested.",
     );
     expect(readTool?.promptGuidelines).toContain(
-      "For exact patch mechanics, follow the tool descriptions.",
+      "For exact patch mechanics, parameters and anchor behavior, follow the tool descriptions.",
+    );
+    expect(readTool?.promptGuidelines).toContain(
+      "If `edit`/`insert` returns `[E_STALE_ANCHOR]` or `[E_AMBIGUOUS_ANCHOR]`, re-read the target range before retrying.",
     );
   });
 
@@ -66,7 +65,7 @@ describe("extension registration", () => {
 
     expect(editTool?.parameters.required).toEqual(["path", "edits"]);
     expect(editTool?.parameters.properties.path.description).toBe(
-      "Path to the UTF-8 text file to patch, relative or absolute.",
+      "Path to the UTF-8 text file to patch (relative or absolute)",
     );
   });
 
@@ -78,9 +77,9 @@ describe("extension registration", () => {
     const insertTool = collectToolDefinitions(registerInsert).find((tool) => tool.name === "insert");
 
     expect(insertTool?.promptSnippet).toContain(
-      "insert: Add new lines without changing existing text.",
+      "Add new lines without changing existing text.",
     );
-    expect(insertTool?.promptSnippet).toContain("follow the schema and tool description");
+    expect(insertTool?.promptSnippet).toContain("Use when you only need to add content.");
   });
 
   it("insert description encourages one call per file", () => {
@@ -90,7 +89,7 @@ describe("extension registration", () => {
       "Submit one `insert` call per file. Put all insertions for that file in `edits`.",
     );
     expect(insertTool?.parameters.properties.path.description).toBe(
-      "Path to the UTF-8 text file to patch, relative or absolute.",
+      "Path to the UTF-8 text file to patch (relative or absolute)",
     );
   });
 

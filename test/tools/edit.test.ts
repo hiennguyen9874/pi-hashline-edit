@@ -159,7 +159,7 @@ describe("registerEditTool", () => {
         );
 
         expect(result.isError).not.toBe(true);
-        expect(result.content[0].text).toContain("[LEGACY_NORMALIZED]");
+        expect(result.content[0].text).toContain("[W_LEGACY_NORMALIZED]");
         expect(await readFile(path, "utf-8")).toBe("alpha\nBETA\ngamma\n");
       });
     } finally {

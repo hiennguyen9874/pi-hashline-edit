@@ -34,7 +34,7 @@ describe("edit merge fallback", () => {
         ctx,
       );
 
-      expect(editResult.content[0].text).toContain("[RELOCATED]");
+      expect(editResult.content[0].text).toContain("[W_RELOCATED]");
 
       // File should have both changes: L8 (from agent) and X (from external)
       const finalContent = readFileSync(path, "utf-8");
@@ -92,7 +92,7 @@ describe("edit merge fallback", () => {
         .find((line: string) => line.includes("│e"))!
         .split("│")[0]!;
       // 2. Insert 1 line at top — shifts e by +1, within fuzzy window (±1)
-      // Hash is unchanged (same neighbors), fuzzy catches with [RELOCATED].
+      // Hash is unchanged (same neighbors), fuzzy catches with [W_RELOCATED].
       writeFileSync(path, "X\na\nb\nc\nd\ne\nf\ng\nh\ni\nj\n", "utf-8");
 
       // 3. Edit with old anchor succeeds via hash-based fuzzy relocation

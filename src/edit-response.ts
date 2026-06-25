@@ -121,7 +121,13 @@ export function buildNoopResponse(input: NoopResponseInput): ToolResult {
         .join("\n")
     : "The edits produced identical content.";
 
-  const text = `No changes made to ${path}\nClassification: noop\n${noopDetailsText}`;
+  const warningsBlock = warningsBlockOf(warnings);
+  const text = [
+    `No changes made to ${path}\nClassification: noop\n${noopDetailsText}`,
+    warningsBlock.trimStart(),
+  ]
+    .filter((section) => section.length > 0)
+    .join("\n\n");
 
   const metrics = buildMetrics({
     classification: "noop",
@@ -134,6 +140,7 @@ export function buildNoopResponse(input: NoopResponseInput): ToolResult {
     content: [{ type: "text", text }],
     details: {
       diff: "",
+      warnings,
       snapshotId,
       classification: "noop" as const,
       metrics,

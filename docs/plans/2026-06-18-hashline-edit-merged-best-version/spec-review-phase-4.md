@@ -2,9 +2,9 @@
 
 ## What Was Done Well
 - Phase 4 scope is largely present in the current working tree: recovery, strict edit input handling, legacy normalization, and doom-loop warnings are implemented under `pi-hashline-edit-merged/`.
-- Hash-only recovery is wired through snapshot line metadata and live unique-hash resolution: `attachSnapshotLines()` fills snapshot positions (`pi-hashline-edit-merged/src/fuzzy-match.ts:33`), mutation attaches them before recovery tiers (`pi-hashline-edit-merged/src/mutation.ts:88`), and relocated live matches emit `[RELOCATED]` (`pi-hashline-edit-merged/src/fuzzy-match.ts:109`).
+- Hash-only recovery is wired through snapshot line metadata and live unique-hash resolution: `attachSnapshotLines()` fills snapshot positions (`pi-hashline-edit-merged/src/fuzzy-match.ts:33`), mutation attaches them before recovery tiers (`pi-hashline-edit-merged/src/mutation.ts:88`), and relocated live matches emit `[W_RELOCATED]` (`pi-hashline-edit-merged/src/fuzzy-match.ts:109`).
 - Stale and ambiguous anchor diagnostics now exist in `formatMismatchError()`, including `[E_STALE_ANCHOR]`, `[E_AMBIGUOUS_ANCHOR]`, candidate line numbers, and hashline samples (`pi-hashline-edit-merged/src/hashline.ts:119`).
-- Exact unique legacy normalization is implemented with `[LEGACY_NORMALIZED]` warnings and non-unique rejection (`pi-hashline-edit-merged/src/edit-normalize.ts:68`, `pi-hashline-edit-merged/src/edit.ts:454`).
+- Exact unique legacy normalization is implemented with `[W_LEGACY_NORMALIZED]` warnings and non-unique rejection (`pi-hashline-edit-merged/src/edit-normalize.ts:68`, `pi-hashline-edit-merged/src/edit.ts:454`).
 - Doom-loop tracking was added and integrated into `read`, `edit`, and `insert` visible responses (`pi-hashline-edit-merged/src/doom-loop.ts`, `pi-hashline-edit-merged/src/read.ts:172`, `pi-hashline-edit-merged/src/edit.ts:454`, `pi-hashline-edit-merged/src/insert.ts:293`).
 - Plan structure satisfies the design cap: the design classifies the work as medium with no more than five phases, and `plan.md` defines exactly five phases.
 
@@ -18,7 +18,7 @@
 ## Plan Deviations
 - **Acceptable tradeoff: `partitionExact()` is stricter than the phase wording.**
   - Phase statement: Task 1 Step 2 says `partitionExact(edits, file)` resolves anchors by unique live hash and returns matched edits with `line` filled in.
-  - Implementation: `partitionExact()` only returns a moved snapshot-line anchor as matched when the resolved live line has not changed; otherwise it leaves the edit for `fuzzyMatch()` so `[RELOCATED]` can be emitted (`pi-hashline-edit-merged/src/fuzzy-match.ts:77`).
+  - Implementation: `partitionExact()` only returns a moved snapshot-line anchor as matched when the resolved live line has not changed; otherwise it leaves the edit for `fuzzyMatch()` so `[W_RELOCATED]` can be emitted (`pi-hashline-edit-merged/src/fuzzy-match.ts:77`).
   - Why it matters: this differs from the helper-level wording, but it preserves the phase goal of warned live relocation classification. If this is accepted, update the plan wording/comment rather than changing behavior.
   - Classification: acceptable tradeoff.
 - **No phase-count cap issue.** Medium plan cap is ≤5 phases; the plan has 5 phases.

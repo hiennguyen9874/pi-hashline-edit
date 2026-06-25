@@ -8,9 +8,9 @@ Default tools:
 - `read`
 - `edit`
 - `insert`
+- `grep`
 
 Optional disabled-by-default tools:
-- `grep`
 - `undo`
 
 Do not add readmap-style `ls`, `find`, `ast_search`, NuShell, bash compression, auto-read, tool-usage, or syntax validation in this package.
@@ -23,7 +23,7 @@ Do not add readmap-style `ls`, `find`, `ast_search`, NuShell, bash compression, 
 - Hashes are computed through one perfect per-file hash array; do not recompute call-site-specific anchors.
 
 ## Project Structure & Module Organization
-- `extensions/` contains Pi extension entrypoints: `core.ts` registers `read`/`edit`, `insert.ts` registers `insert`, and optional modules live in `grep.ts` and `undo.ts`.
+- `extensions/` contains Pi extension entrypoints: `core.ts` registers `read`/`edit`, `insert.ts` registers `insert`, `grep.ts` registers `grep`, and optional modules live in `undo.ts`.
 - `src/` contains the implementation, split by responsibility: `read.ts`, `edit.ts`, `insert.ts`, `hashline.ts`, `edit-diff.ts`, `file-kind.ts`, `fs-write.ts`, and small runtime/path helpers.
 - `tool-descriptions/` holds the Markdown prompt text loaded by the tools at runtime.
 - `test/` mirrors the code layout: `core/` for hashline primitives, `tools/` for tool behavior, `extension/` for registration, `integration/` for end-to-end flows, and `support/fixtures.ts` for temp-file helpers.

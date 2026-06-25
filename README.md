@@ -63,7 +63,7 @@ Replace an inclusive range using hash-only anchors:
 }
 ```
 
-- `start` and `end` are 3-character hashes from a fresh `read` or successful edit diff.
+- `start` and `end` are 3-character hashes from a fresh `read`, `grep`, or successful edit diff.
 - Use the same hash for a single-line replacement.
 - `lines` must be literal file content, not rendered hashline output.
 - Use `[]` to delete the range.
@@ -83,9 +83,9 @@ Insert lines before or after an existing anchor line:
 
 `insert` preserves the anchor line and only adds new content.
 
-## Optional `grep`
+## `grep`
 
-`grep` searches files and emits the same hash-only anchors as `read`:
+`grep` is enabled by default. It searches files and emits hash-only anchors usable by `edit` and `insert`:
 
 ```text
 aB3│matching line
@@ -102,7 +102,7 @@ Use the 3-character hash before `│` directly in `edit.start`, `edit.end`, or `
 - `LINE#HH│content` is now `HHH│content` by default.
 - `range: ["42#A4", "45#C7"]` is now `start: "aB3", end: "xY7"`.
 - Hashes are 3-character base64url anchors with per-file collision resolution.
-- `grep` and `undo` ship as optional extensions but are not enabled by default.
+- `grep` is enabled by default for coding-agent search workflows; `undo` remains optional and is not enabled by default.
 
 ## Safety guarantees
 

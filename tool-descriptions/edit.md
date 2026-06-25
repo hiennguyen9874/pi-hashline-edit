@@ -1,6 +1,6 @@
 Replace or delete UTF-8 text using 3-character hash anchors copied from `read`. Use `insert` instead when you only need to add lines.
 
-Submit one `edit` call per file. Put all replacements/deletions in `edits`; anchors must come from the same fresh source — the latest `read` or successful edit diff for this file.
+Submit one `edit` call per file. Put all replacements/deletions in `edits`; anchors must come from the same fresh source — the latest `read`, enabled `grep`, or successful edit/insert diff for this file.
 
 Call shape:
 ```json
@@ -20,5 +20,5 @@ Each edit deletes the inclusive anchor range and replaces it with exactly `lines
 Rules:
 - Put `path` only at the top level. Do not put `path` inside an edit item.
 - Copy only the 3-character hash. In `LINE#HASH│content`, use only `HASH`; do not include line numbers, #, │, or content.
-- Do not guess anchors; copy them from the latest `read` or successful edit diff.
+- Do not guess anchors; copy them from the latest `read`, enabled `grep`, or successful edit/insert diff.
 - Do not emit overlapping or adjacent edits — merge them into one.

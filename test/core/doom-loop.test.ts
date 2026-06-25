@@ -14,7 +14,7 @@ describe("doom-loop", () => {
     recordToolCall(state, "read", "3", { path: "a.ts" });
     const warning = consumeDoomLoopWarning(state, "3");
     expect(warning?.kind).toBe("identical-tail");
-    expect(formatDoomLoopMessage(warning!)).toContain("REPEATED-CALL WARNING");
+    expect(formatDoomLoopMessage(warning!)).toContain("[W_REPEATED_CALL]");
   });
 
   it("warns on a repeated two-step cycle", () => {
@@ -24,6 +24,6 @@ describe("doom-loop", () => {
     }
     const warning = consumeDoomLoopWarning(state, "6");
     expect(warning?.kind).toBe("repeated-subsequence");
-    expect(formatDoomLoopMessage(warning!)).toContain("ALTERNATING-CALL WARNING");
+    expect(formatDoomLoopMessage(warning!)).toContain("[W_ALTERNATING_CALL]");
   });
 });

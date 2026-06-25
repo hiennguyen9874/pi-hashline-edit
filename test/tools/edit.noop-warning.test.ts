@@ -38,6 +38,36 @@ describe("edit tool noop + warnings", () => {
     });
   });
 
+  it("includes warnings in noop responses", async () => {
+    await withTempFile("sample.txt", "aaa\n\\uDDDD\nccc\n", async ({ cwd }) => {
+      const { pi, getTool } = makeFakePiRegistry();
+      registerCore(pi);
+      const editTool = getTool("edit");
+      const suspiciousRef = computeLineHash(["aaa", "\\uDDDD", "ccc"], 1);
+
+      const result = await editTool.execute(
+        "e1",
+        {
+          path: "sample.txt",
+          edits: [
+            {
+              start: suspiciousRef, end: suspiciousRef,
+              lines: ["\\uDDDD"],
+            },
+          ],
+        },
+        undefined,
+        undefined,
+        { cwd, hasUI: true, ui: { notify() {} } } as any,
+      );
+
+      expect(getText(result)).toContain("Classification: noop");
+      expect(getText(result)).toContain("Warnings:");
+      expect(getText(result)).toContain("Detected literal \\uDDDD");
+      expect(result.details?.warnings?.[0]).toContain("Detected literal \\uDDDD");
+    });
+  });
+
   it("emits a boundary duplication warning without blocking the edit", async () => {
     await withTempFile("sample.txt", "aaa\nbbb\nccc\n", async ({ cwd, path }) => {
       const { pi, getTool } = makeFakePiRegistry();

@@ -38,7 +38,7 @@ it("resolves a moved anchor by unique live hash and warns when snapshot line cha
 
   expect(result.matched).toHaveLength(1);
   expect(result.matched[0]!.pos.line).toBe(4);
-  expect(result.warnings).toContain("[RELOCATED] 1 range(s) relocated via hash matching. Please review the diff carefully.");
+  expect(result.warnings).toContain("[W_RELOCATED] 1 range(s) relocated via hash matching. Please review the diff carefully.");
 });
 
 it("leaves absent hashes unmatched for snapshot merge", () => {
@@ -56,7 +56,7 @@ Update `test/integration/merge-fallback.test.ts` so it follows this flow:
 1. `read` file and capture hash for a line.
 2. Modify the file externally so the hash is absent from live content but present in the read snapshot.
 3. Call `edit` with the old hash.
-4. Expect result text to contain `[MERGED]` when `threeWayMerge` succeeds, or `[E_STALE_ANCHOR]` when the merge cannot be safely computed.
+4. Expect result text to contain `[W_MERGED]` when `threeWayMerge` succeeds, or `[E_STALE_ANCHOR]` when the merge cannot be safely computed.
 
 Run:
 
@@ -73,7 +73,7 @@ In `src/fuzzy-match.ts`, keep the exported names `partitionExact` and `fuzzyMatc
 
 - `partitionExact(edits, file)` resolves anchors by unique live hash. It returns matched edits with `line` filled in.
 - If an edit already has `line` metadata from a snapshot and the live line is the same, no warning.
-- `fuzzyMatch(edits, file)` also resolves by unique live hash, but emits `[RELOCATED]` when any resolved line differs from supplied snapshot line metadata.
+- `fuzzyMatch(edits, file)` also resolves by unique live hash, but emits `[W_RELOCATED]` when any resolved line differs from supplied snapshot line metadata.
 - Absent hashes remain unmatched for snapshot merge.
 - Ambiguous hashes remain unmatched and should later become `[E_AMBIGUOUS_ANCHOR]` through mismatch formatting.
 
@@ -191,7 +191,7 @@ it("normalizes legacy oldText/newText only when oldText is exact and unique", as
   const file = await writeFixture("sample.ts", "alpha\nbeta\n");
   const result = await executeEdit({ path: file, oldText: "beta", newText: "BETA" } as any);
   expect(result.isError).not.toBe(true);
-  expect(result.content[0].text).toContain("[LEGACY_NORMALIZED]");
+  expect(result.content[0].text).toContain("[W_LEGACY_NORMALIZED]");
   expect(await readText(file)).toBe("alpha\nBETA\n");
 });
 
@@ -232,7 +232,7 @@ Behavior:
 - If zero: throw `[E_LEGACY_NOT_FOUND] oldText was not found exactly once.`
 - If more than one: throw `[E_LEGACY_NON_UNIQUE] oldText matched N times; use read + hash anchors.`
 - If exactly one: synthesize a single hashline edit by finding the affected line range in the current content, using current file hashes, and setting `lines` to `newText` split by newline.
-- Return `warnings: ["[LEGACY_NORMALIZED] Converted exact unique oldText/newText request to hashline edit. Prefer read + hash anchors."]`.
+- Return `warnings: ["[W_LEGACY_NORMALIZED] Converted exact unique oldText/newText request to hashline edit. Prefer read + hash anchors."]`.
 
 Important: legacy normalization is exact-only. Do not trim, fuzzy-match, or patch partial near-misses.
 
@@ -318,7 +318,7 @@ describe("doom-loop", () => {
     recordToolCall(state, "read", "3", { path: "a.ts" });
     const warning = consumeDoomLoopWarning(state, "3");
     expect(warning?.kind).toBe("identical-tail");
-    expect(formatDoomLoopMessage(warning!)).toContain("REPEATED-CALL WARNING");
+    expect(formatDoomLoopMessage(warning!)).toContain("[W_REPEATED_CALL]");
   });
 
   it("warns on a repeated two-step cycle", () => {
@@ -328,7 +328,7 @@ describe("doom-loop", () => {
     }
     const warning = consumeDoomLoopWarning(state, "6");
     expect(warning?.kind).toBe("repeated-subsequence");
-    expect(formatDoomLoopMessage(warning!)).toContain("ALTERNATING-CALL WARNING");
+    expect(formatDoomLoopMessage(warning!)).toContain("[W_ALTERNATING_CALL]");
   });
 });
 ```
@@ -384,7 +384,7 @@ For thrown errors in `edit`/`insert`, catch only where the tool already converts
 
 - [ ] **Step 4: Add tool-level warning smoke test**
 
-Add one test in `test/tools/read.test.ts` or `test/tools/edit.test.ts` that calls the same tool with same params three times and asserts the third response contains `REPEATED-CALL WARNING`.
+Add one test in `test/tools/read.test.ts` or `test/tools/edit.test.ts` that calls the same tool with same params three times and asserts the third response contains `[W_REPEATED_CALL]`.
 
 Keep the test isolated by exporting and calling a reset helper if needed:
 
