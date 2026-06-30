@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { execSync } from "child_process";
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
+import { dirname, join } from "path";
 import { grepToolDefinition } from "../../src/grep";
 import { makeFakePiRegistry } from "../support/fixtures";
 import registerCore from "../../extensions/core";
@@ -20,6 +20,7 @@ function tempDir() {
   return {
     dir,
     add(filename: string, content: string) {
+      mkdirSync(dirname(join(dir, filename)), { recursive: true });
       writeFileSync(join(dir, filename), content, "utf-8");
     },
     cleanup() {
@@ -142,6 +143,53 @@ describe("grep tool execution", () => {
       expect(text).toContain("x.ts");
       expect(text).toContain("y.ts");
     } finally {
+      tmp.cleanup();
+    }
+  });
+
+  it.skipIf(!rgAvailable)("searches multiple paths from an array", async () => {
+    const tmp = tempDir();
+    try {
+      tmp.add("src/a.ts", "const fromSrc = true;\n");
+      tmp.add("tests/b.ts", "const fromTests = true;\n");
+      tmp.add("docs/c.ts", "const fromDocs = true;\n");
+
+      const result = await grepToolDefinition.execute(
+        "g1",
+        { pattern: "const", path: [join(tmp.dir, "src"), join(tmp.dir, "tests")] },
+        undefined,
+      );
+
+      const text = (result as any).content[0].text;
+      expect(text).toContain("a.ts");
+      expect(text).toContain("b.ts");
+      expect(text).not.toContain("c.ts");
+    } finally {
+      tmp.cleanup();
+    }
+  });
+
+  it.skipIf(!rgAvailable)("searches whitespace-separated paths", async () => {
+    const tmp = tempDir();
+    const cwd = process.cwd();
+    try {
+      process.chdir(tmp.dir);
+      tmp.add("src/a.ts", "const fromSrc = true;\n");
+      tmp.add("tests/b.ts", "const fromTests = true;\n");
+      tmp.add("docs/c.ts", "const fromDocs = true;\n");
+
+      const result = await grepToolDefinition.execute(
+        "g1",
+        { pattern: "const", path: "src tests" },
+        undefined,
+      );
+
+      const text = (result as any).content[0].text;
+      expect(text).toContain("src/a.ts");
+      expect(text).toContain("tests/b.ts");
+      expect(text).not.toContain("docs/c.ts");
+    } finally {
+      process.chdir(cwd);
       tmp.cleanup();
     }
   });

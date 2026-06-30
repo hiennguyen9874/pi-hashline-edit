@@ -9,7 +9,7 @@ import { stat as fsStat } from "fs/promises";
 import { createInterface } from "readline";
 import { spawn, spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
-import { relative, basename, join } from "path";
+import { relative, basename, join, isAbsolute } from "path";
 import { homedir } from "os";
 import { Type } from "@sinclair/typebox";
 import { Text } from "@earendil-works/pi-tui";
@@ -24,7 +24,10 @@ import { normalizeToLF, stripBom } from "./edit-diff";
 
 const grepSchema = Type.Object({
   pattern: Type.String({ description: "Search pattern (regex or literal string)" }),
-  path: Type.Optional(Type.String({ description: "Directory or file to search (default: current directory)" })),
+  path: Type.Optional(Type.Union([
+    Type.String({ description: "Directory/file path, whitespace-separated paths, or array of paths to search (default: current directory)" }),
+    Type.Array(Type.String(), { description: "Directories or files to search" }),
+  ])),
   glob: Type.Optional(Type.String({ description: "Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'" })),
   ignoreCase: Type.Optional(Type.Boolean({ description: "Case-insensitive search (default: false)" })),
   literal: Type.Optional(Type.Boolean({ description: "Treat pattern as literal string instead of regex (default: false)" })),
@@ -34,7 +37,7 @@ const grepSchema = Type.Object({
 
 type GrepParams = {
   pattern: string;
-  path?: string;
+  path?: string | string[];
   glob?: string;
   ignoreCase?: boolean;
   literal?: boolean;
@@ -89,12 +92,50 @@ function truncateLine(text: string): { text: string; truncated: boolean } {
   if (text.length <= MAX_LINE_CHARS) return { text, truncated: false };
   return { text: text.slice(0, MAX_LINE_CHARS) + "…", truncated: true };
 }
+interface SearchPath {
+  raw: string;
+  path: string;
+  isDirectory: boolean;
+}
 
-function formatPath(filePath: string, searchPath: string, isDirectory: boolean): string {
-  if (isDirectory) {
-    const rel = relative(searchPath, filePath);
-    if (rel && !rel.startsWith("..")) return rel.replace(/\\/g, "/");
+function splitSearchPathInput(path: string | string[] | undefined): string[] {
+  if (Array.isArray(path)) {
+    const paths = path.filter(p => p.trim());
+    return paths.length ? paths : ["."];
   }
+  if (!path?.trim()) return ["."];
+
+  const resolved = resolveToCwd(path, process.cwd());
+  if (existsSync(resolved)) return [path];
+
+  return path.split(/\s+/).filter(Boolean);
+}
+
+function isWithinPath(filePath: string, searchPath: string): boolean {
+  const rel = relative(searchPath, filePath);
+  return !!rel && !rel.startsWith("..") && !isAbsolute(rel);
+}
+
+function formatPath(filePath: string, searchPaths: SearchPath[]): string {
+  if (searchPaths.length === 1) {
+    const [searchPath] = searchPaths;
+    if (searchPath!.isDirectory) {
+      const rel = relative(searchPath!.path, filePath);
+      if (rel && !rel.startsWith("..")) return rel.replace(/\\/g, "/");
+    }
+    return basename(filePath);
+  }
+
+  for (const searchPath of searchPaths) {
+    if (!searchPath.isDirectory || !isWithinPath(filePath, searchPath.path)) continue;
+    const rel = relative(searchPath.path, filePath).replace(/\\/g, "/");
+    const raw = searchPath.raw.replace(/\\/g, "/").replace(/\/$/, "");
+    if (raw && raw !== "." && !isAbsolute(searchPath.raw)) return `${raw}/${rel}`;
+    return rel;
+  }
+
+  const rel = relative(process.cwd(), filePath);
+  if (rel && !rel.startsWith("..") && !isAbsolute(rel)) return rel.replace(/\\/g, "/");
   return basename(filePath);
 }
 
@@ -122,7 +163,7 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
   renderCall(args, theme, context) {
     const params = args as Partial<GrepParams>;
     const p = params.pattern || "";
-    const dir = params.path || ".";
+    const dir = Array.isArray(params.path) ? params.path.join(" ") : (params.path || ".");
     const { glob } = params;
     let text = theme.fg("toolTitle", theme.bold("grep")) + " ";
     text += theme.fg("accent", `/${p}/`);
@@ -167,12 +208,19 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
       throw new Error("ripgrep (rg) is not available. Install it: https://github.com/BurntSushi/ripgrep");
     }
 
-    const searchPath = resolveToCwd(searchDir || ".", process.cwd());
-    let isDirectory: boolean;
-    try {
-      isDirectory = (await fsStat(searchPath)).isDirectory();
-    } catch {
-      throw new Error(`Path not found: ${searchPath}`);
+    const requestedPaths = splitSearchPathInput(searchDir);
+    const searchPaths: SearchPath[] = [];
+    for (const requestedPath of requestedPaths) {
+      const searchPath = resolveToCwd(requestedPath, process.cwd());
+      try {
+        searchPaths.push({
+          raw: requestedPath,
+          path: searchPath,
+          isDirectory: (await fsStat(searchPath)).isDirectory(),
+        });
+      } catch {
+        throw new Error(`Path not found: ${searchPath}`);
+      }
     }
 
     return new Promise((resolveFn, rejectFn) => {
@@ -188,7 +236,7 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
       if (literal) args.push("--fixed-strings");
       if (glob) args.push("--glob", glob);
       if (rgContext > 0) args.push("--context", String(rgContext));
-      args.push("--", pattern, searchPath);
+      args.push("--", pattern, ...searchPaths.map(searchPath => searchPath.path));
 
       const child = spawn(rgExe, args, { stdio: ["ignore", "pipe", "pipe"] });
       const rl = createInterface({ input: child.stdout });
@@ -271,7 +319,7 @@ export const grepToolDefinition: ToolDefinition<typeof grepSchema, undefined, un
           if (!entries.length) continue;
           entries.sort((a, b) => a.lineNumber - b.lineNumber);
 
-          const relativePath = formatPath(filePath, searchPath, isDirectory);
+          const relativePath = formatPath(filePath, searchPaths);
           outputLines.push(`\n${relativePath}`);
 
           let file;

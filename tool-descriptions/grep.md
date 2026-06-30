@@ -10,7 +10,7 @@ Use the 3-character hash before `│` directly in `edit.start`, `edit.end`, or `
 
 **Parameters:**
 - `pattern` (required) — regex or literal search pattern
-- `path` (optional) — directory or file to search; defaults to the project root
+- `path` (optional) — directory/file path, whitespace-separated paths (e.g. `src tests`), or an array of paths to search; defaults to the project root
 - `glob` (optional) — file filter, e.g. `*.ts` or `**/*.spec.ts`
 - `ignoreCase` (optional) — case-insensitive mode; default false
 - `literal` (optional) — treat pattern as a literal string; default false
